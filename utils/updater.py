@@ -308,17 +308,26 @@ def schedule_relaunch(
 
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
+        # 供新进程 claim_instance 二次清理
+        try:
+            from utils.instance import mark_restarting
+
+            mark_restarting(pid)
+        except Exception:
+            pass
+
         if sys.platform.startswith("win"):
             helper = DATA_DIR / "_auto_restart.cmd"
             # ping -n N ≈ N-1 秒
             n = max(2, int(delay) + 1)
             # 每段参数单独加引号，避免路径空格
             start_parts = " ".join(f'"{part}"' for part in cmd)
-            # 先杀旧再启新：避免双开，且不依赖用户点「退出」
+            # 先杀旧再启新：不依赖用户点退出 / 关窗
             lines = [
                 "@echo off",
                 f"ping -n {n} 127.0.0.1 >nul",
                 f"taskkill /PID {pid} /F >nul 2>&1",
+                f"taskkill /PID {pid} /T /F >nul 2>&1",
                 "ping -n 2 127.0.0.1 >nul",
                 f'cd /d "{cwd}"',
                 f'start "" {start_parts}',

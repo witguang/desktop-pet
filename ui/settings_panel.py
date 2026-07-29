@@ -176,13 +176,13 @@ class SettingsPanel:
 
         ttk.Checkbutton(
             upd,
-            text="✓ 更新后自动重启（默认开启 · 无需手动关闭桌宠）",
+            text="更新后自动重启（推荐 · 默认开）",
             variable=self._auto_restart_var,
             command=self._on_auto_restart_toggle,
         ).grid(row=7, column=0, columnspan=3, sticky="w", pady=(4, 0))
         ttk.Label(
             upd,
-            text="勾选后点「立即更新」：装完会自动结束当前进程并启动新桌宠，不用你手动关。",
+            text="开启时：点「立即更新」装完后会强制结束旧进程并启动新桌宠，你不用手动退出。",
             foreground="#1565C0",
             font=("Microsoft YaHei UI", 8),
             wraplength=460,
@@ -450,7 +450,7 @@ class SettingsPanel:
 
         def work() -> None:
             try:
-                # 安装成功后在 download_and_apply 内立刻安排独立脚本重启
+                # 安装成功后立刻写独立脚本：taskkill 旧 PID → 启动新桌宠
                 used = download_and_apply(
                     repo=self.app.settings.github_repo,
                     branch=self.app.settings.github_branch,
@@ -458,59 +458,47 @@ class SettingsPanel:
                     progress=lambda m: self._set_status(m),
                     auto_restart=do_restart,
                     allow_downgrade=False,
-                    restart_delay_sec=3.0,
+                    restart_delay_sec=2.0,
                 )
                 ver = read_local_version()
                 if do_restart:
                     self._set_status(
                         f"更新完成 · VERSION={ver}\n来源: {used}\n"
-                        "已安排自动重启（约 3 秒），无需手动关闭。"
+                        "正在自动重启：约 2 秒后结束本进程并启动新桌宠（无需你操作）。"
                     )
+
+                    def _auto_only() -> None:
+                        # 不弹「请关闭」对话框——独立脚本会强制结束本进程
+                        # 尝试优雅退出；失败也没关系，taskkill 会兜底
+                        try:
+                            self.app.quit_app(confirm=False)
+                        except Exception:
+                            pass
+
+                    root = self.app.root
+                    if root:
+                        # 给状态文案一点时间刷新，再软退出
+                        root.after(200, _auto_only)
                 else:
                     self._set_status(
                         f"更新完成 · VERSION={ver}\n来源: {used}\n"
                         "未勾选自动重启：请点「退出桌宠」后重新运行。"
                     )
 
-                def _popup_done() -> None:
-                    parent = self.win if self.win and self.win.winfo_exists() else None
-                    try:
-                        if do_restart:
-                            # 脚本已在倒计时：尽量不阻塞；点确定后优雅退出作辅助
-                            try:
-                                messagebox.showinfo(
-                                    "更新完成 · 即将自动重启",
-                                    f"已更新到 VERSION {ver}\n\n"
-                                    "无需手动关闭桌宠。\n"
-                                    "约 3 秒内会自动结束本进程并打开新版本。\n"
-                                    "（若本窗未消失，点确定即可。）",
-                                    parent=parent,
-                                )
-                            except Exception:
-                                pass
-                            try:
-                                self.app.quit_app(confirm=False)
-                            except Exception:
-                                pass
-                        else:
-                            messagebox.showinfo(
-                                "更新完成",
-                                f"已更新到 VERSION {ver}\n\n"
-                                "当前未开启自动重启。\n"
-                                "请打开控制面板 →「退出桌宠」，再重新运行程序。\n\n"
-                                "下次更新前勾选「更新后自动重启」即可免手动关闭。",
-                                parent=parent,
-                            )
-                    except Exception:
-                        if do_restart:
-                            try:
-                                self.app.quit_app(confirm=False)
-                            except Exception:
-                                pass
+                    def _popup_manual() -> None:
+                        parent = self.win if self.win and self.win.winfo_exists() else None
+                        messagebox.showinfo(
+                            "更新完成",
+                            f"已更新到 VERSION {ver}\n\n"
+                            "当前未开启「更新后自动重启」。\n"
+                            "请点控制面板「退出桌宠」，再重新运行。\n\n"
+                            "若希望下次不用手动关：请勾选上方自动重启后再更新。",
+                            parent=parent,
+                        )
 
-                root = self.app.root
-                if root:
-                    root.after(0, _popup_done)
+                    root = self.app.root
+                    if root:
+                        root.after(0, _popup_manual)
             except Exception as exc:  # noqa: BLE001
                 self._set_status(f"更新失败: {exc}")
 

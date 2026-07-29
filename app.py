@@ -633,8 +633,8 @@ class DesktopPetApp:
 
     def restart_app(self, *, delay_sec: float = 2.0) -> None:
         """
-        安排新进程启动并结束当前实例（更新后自动重启用）。
-        使用独立脚本 taskkill，不弹退出确认；即使窗口关不干净也会被结束。
+        安排：独立脚本强制结束当前进程并启动新桌宠。
+        不要求用户手动关闭；taskkill 兜底，不依赖窗口能否正常退出。
         """
         from utils.updater import schedule_relaunch
 
@@ -642,16 +642,20 @@ class DesktopPetApp:
         if not ok:
             messagebox.showwarning(
                 "自动重启",
-                f"更新已安装，但自动重启失败：\n{msg}\n\n"
-                "请用控制面板「退出桌宠」，或任务管理器结束进程后重新运行。",
+                f"更新已安装，但自动重启脚本启动失败：\n{msg}\n\n"
+                "可再点一次「立即更新」并保持勾选自动重启；\n"
+                "或用任务管理器结束本进程后重新运行。",
                 parent=self.root,
             )
             return
-        # 尽量优雅退出；脚本稍后仍会 taskkill 兜底
+        # 软退出辅助；真正结束靠脚本 taskkill，用户无需再操作
         try:
-            self.root.after(300, lambda: self.quit_app(confirm=False))
+            self.root.after(200, lambda: self.quit_app(confirm=False))
         except Exception:
-            self.quit_app(confirm=False)
+            try:
+                self.quit_app(confirm=False)
+            except Exception:
+                pass
 
     def run(self) -> None:
         self.root.mainloop()
@@ -695,6 +699,15 @@ def main() -> int:
     """
     character_id = None
     args = list(sys.argv[1:])
+
+    # 新进程启动时接管：清掉更新后残留的旧桌宠（用户无需手动结束旧进程）
+    if "--install" not in args and "--list-characters" not in args:
+        try:
+            from utils.instance import claim_instance
+
+            claim_instance(kill_others=True)
+        except Exception:
+            pass
 
     if "--install" in args:
         from ui.setup_wizard import SetupWizard
