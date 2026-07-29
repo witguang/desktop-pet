@@ -14,6 +14,7 @@ from tkinter import messagebox, ttk
 
 from data.memo_history import (
     HistoryVersion,
+    history_dir_for,
     list_versions,
     record_version,
     restore_version,
@@ -92,6 +93,29 @@ def open_path_externally(path: Path) -> None:
         subprocess.Popen(["xdg-open", str(path)])
 
 
+def open_folder_externally(path: Path, *, select_file: Path | None = None) -> None:
+    """
+    在资源管理器中打开文件夹。
+    Windows 若提供 select_file，会定位并选中该文件。
+    """
+    path = Path(path)
+    path.mkdir(parents=True, exist_ok=True)
+    if sys.platform.startswith("win"):
+        if select_file is not None and Path(select_file).exists():
+            # /select, 后不要多余空格写进路径
+            subprocess.Popen(["explorer", f"/select,{Path(select_file).resolve()}"])
+        else:
+            os.startfile(str(path.resolve()))  # type: ignore[attr-defined]
+        return
+    if sys.platform == "darwin":
+        if select_file is not None and Path(select_file).exists():
+            subprocess.Popen(["open", "-R", str(Path(select_file).resolve())])
+        else:
+            subprocess.Popen(["open", str(path.resolve())])
+        return
+    subprocess.Popen(["xdg-open", str(path.resolve())])
+
+
 class MemoPanel:
     """今日备忘录：序号白板 + 历史版本。"""
 
@@ -141,6 +165,7 @@ class MemoPanel:
         btns = ttk.Frame(top)
         btns.grid(row=0, column=1, sticky="e")
         ttk.Button(btns, text="历史版本", command=self.open_history, width=10).pack(side="left", padx=2)
+        ttk.Button(btns, text="打开文件夹", command=self.open_memo_folder, width=10).pack(side="left", padx=2)
         ttk.Button(btns, text="刷新", command=self.reload, width=8).pack(side="left", padx=2)
         ttk.Button(btns, text="外部打开", command=self.open_external, width=10).pack(side="left", padx=2)
 
@@ -361,6 +386,36 @@ class MemoPanel:
         except OSError as exc:
             messagebox.showerror("打开失败", str(exc), parent=self.win)
 
+    def open_memo_folder(self) -> None:
+        """在资源管理器中打开备忘录目录，并尽量选中今日笔记。"""
+        path = self._note_path()
+        try:
+            folder = path.parent
+            folder.mkdir(parents=True, exist_ok=True)
+            if not path.exists():
+                save_memo_text(path, self._get_body() or default_memo_body(self._day), snapshot=False)
+            open_folder_externally(folder, select_file=path if path.exists() else None)
+            self._status_var.set(f"已打开文件夹 · {folder}")
+        except OSError as exc:
+            messagebox.showerror("打开文件夹失败", str(exc), parent=self.win)
+
+    def open_history_folder(self) -> None:
+        """打开当前笔记的历史版本快照目录。"""
+        note = self._note_path()
+        hdir = history_dir_for(note)
+        try:
+            hdir.mkdir(parents=True, exist_ok=True)
+            open_folder_externally(hdir)
+            parent = self._history_win or self.win
+            if parent and self._status_var:
+                self._status_var.set(f"已打开历史目录 · {hdir}")
+        except OSError as exc:
+            messagebox.showerror(
+                "打开历史文件夹失败",
+                str(exc),
+                parent=self._history_win or self.win,
+            )
+
     # ------------------------------------------------------------------
     # 历史版本
     # ------------------------------------------------------------------
@@ -386,12 +441,26 @@ class MemoPanel:
         hw.columnconfigure(1, weight=2)
         hw.rowconfigure(1, weight=1)
 
+        header = ttk.Frame(hw, padding=(10, 10, 10, 4))
+        header.grid(row=0, column=0, columnspan=2, sticky="ew")
+        header.columnconfigure(0, weight=1)
         ttk.Label(
-            hw,
+            header,
             text="类似 GitHub 的增删记录 · 选中版本可预览并恢复（防误删）",
-            padding=10,
             font=("Microsoft YaHei UI", 9),
-        ).grid(row=0, column=0, columnspan=2, sticky="w")
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            header,
+            text="打开历史文件夹",
+            command=self.open_history_folder,
+            width=14,
+        ).grid(row=0, column=1, sticky="e", padx=(8, 0))
+        ttk.Button(
+            header,
+            text="打开笔记文件夹",
+            command=self.open_memo_folder,
+            width=14,
+        ).grid(row=0, column=2, sticky="e", padx=(4, 0))
 
         left = ttk.Frame(hw, padding=(10, 0, 6, 10))
         left.grid(row=1, column=0, sticky="nsew")
@@ -427,6 +496,8 @@ class MemoPanel:
         bar.grid(row=2, column=0, columnspan=2, sticky="ew")
         ttk.Button(bar, text="恢复此版本", command=self._restore_selected).pack(side="left", padx=4)
         ttk.Button(bar, text="刷新列表", command=self._refresh_history_list).pack(side="left", padx=4)
+        ttk.Button(bar, text="打开历史文件夹", command=self.open_history_folder).pack(side="left", padx=4)
+        ttk.Button(bar, text="打开笔记文件夹", command=self.open_memo_folder).pack(side="left", padx=4)
         ttk.Button(bar, text="关闭", command=self._close_history).pack(side="right", padx=4)
 
         self._refresh_history_list()

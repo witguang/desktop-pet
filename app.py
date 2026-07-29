@@ -6,11 +6,10 @@
 """
 from __future__ import annotations
 
-
+import random
 import sys
 import tkinter as tk
 from tkinter import messagebox
-
 
 from config import (
     ACTION_STILL_HOLD_MS,
@@ -19,6 +18,10 @@ from config import (
     HOTKEY_SPAWN_FOOD,
     HOTKEY_SWITCH_CHARACTER,
     HOTKEY_TOGGLE_PANEL,
+    IDLE_RANDOM_MAX_SEC,
+    IDLE_RANDOM_MIN_SEC,
+    IDLE_RANDOM_STATES,
+    IDLE_RANDOM_STILL_HOLD_MS,
     WATER_CHECK_INTERVAL_MS,
     PetState,
 )
@@ -29,6 +32,7 @@ from core.character_pack import (
     get_default_character,
 )
 from core.hunger import HungerSystem
+from core.meal_reminder import MealReminder
 from core.mood import MoodSystem
 from core.pet_state import PetStateMachine
 from core.pomodoro import PomodoroTimer, TimerMode, TimerStatus
@@ -39,6 +43,7 @@ from data.storage import TaskStorage
 from ui.bubble import SpeechBubble
 from ui.character_picker import CharacterPicker
 from ui.control_panel import ControlPanel
+from ui.eat_drink_settings import EatDrinkSettingsPanel
 from ui.food_item import FoodItem
 from ui.memo_panel import MemoPanel
 from ui.pet_window import PetWindow
@@ -75,8 +80,10 @@ class DesktopPetApp:
         self.hunger = HungerSystem()
         self.mood = MoodSystem()
         self.water = WaterReminder()
+        self.meal = MealReminder()
         self.reminders = ReminderSession()
         self.state_machine = PetStateMachine()
+        self.apply_reminder_schedules()
 
         cid = character_id or self.settings.character_id
         try:
@@ -93,6 +100,7 @@ class DesktopPetApp:
         self._temp_job: str | None = None
         self._hotkeys_enabled = False
         self._loops_started = False
+        self._random_idle_job: str | None = None
 
         self.pet = PetWindow(
             self.root,
@@ -107,19 +115,21 @@ class DesktopPetApp:
         self.character_picker = CharacterPicker(self)
         self.memo_panel = MemoPanel(self)
         self.settings_panel = SettingsPanel(self)
+        self.eat_drink_panel = EatDrinkSettingsPanel(self)
 
         self.state_machine.add_listener(self._on_state_changed)
         self.timer.add_listener(self._on_timer_changed)
         self.hunger.add_listener(self._on_hunger_changed)
         self.mood.add_listener(self._on_mood_changed)
         self.water.add_listener(self._on_water_remind)
+        self.meal.add_listener(self._on_meal_remind)
         self.reminders.add_start_listener(self._on_reminder_started)
         self.reminders.add_complete_listener(self._on_reminder_completed)
 
 
         self._try_register_hotkeys()
         self._schedule_loops()
-
+        self._schedule_random_idle()
 
         self.root.after(
             600,
@@ -170,6 +180,14 @@ class DesktopPetApp:
     def open_main_settings(self) -> None:
         self.settings_panel.open()
 
+    def open_eat_drink_settings(self) -> None:
+        self.eat_drink_panel.open()
+
+    def apply_reminder_schedules(self) -> None:
+        """从设置加载喝水 / 用餐时刻表。"""
+        self.water.set_schedule(self.settings.water_reminders)
+        self.meal.set_schedule(self.settings.meal_reminders)
+
     def list_characters(self) -> list[CharacterPack]:
         return discover_characters()
 
@@ -219,8 +237,68 @@ class DesktopPetApp:
 
     def _tick_water(self) -> None:
         self.water.check()
+        self.meal.check()
         self.root.after(WATER_CHECK_INTERVAL_MS, self._tick_water)
 
+    # ------------------------------------------------------------------
+    # 空闲随机动作（生动感）
+    # ------------------------------------------------------------------
+    def _schedule_random_idle(self) -> None:
+        if self._random_idle_job:
+            try:
+                self.root.after_cancel(self._random_idle_job)
+            except Exception:
+                pass
+        delay_ms = random.randint(IDLE_RANDOM_MIN_SEC, IDLE_RANDOM_MAX_SEC) * 1000
+        self._random_idle_job = self.root.after(delay_ms, self._tick_random_idle)
+
+    def _tick_random_idle(self) -> None:
+        self._random_idle_job = None
+        try:
+            self._maybe_random_action()
+        finally:
+            self._schedule_random_idle()
+
+    def _maybe_random_action(self) -> None:
+        """仅在真正空闲时随机播一段动作，再回 idle。"""
+        if self.reminders.is_locked:
+            return
+        if self._temp_job is not None:
+            return
+        if self.timer.is_focus_running():
+            return
+        # 面板打开时也允许随机；仅限基础态
+        if self.state_machine.state not in (PetState.IDLE, PetState.HUNGRY):
+            return
+
+        candidates: list[str] = []
+        for st in IDLE_RANDOM_STATES:
+            if st in self.character.states:
+                candidates.append(st)
+            elif self.character.state_path(st) is not None:
+                candidates.append(st)
+        # 去掉当前 hungy 时再播 hungry 意义不大；drink 随机只做短动画非锁定
+        if not candidates:
+            return
+
+        state = random.choice(candidates)
+        anim = self.character.raw.get("animation") or {}
+        if state == PetState.FLY:
+            duration = int(anim.get("fly_ms", FLY_ANIMATION_MS))
+        elif state == PetState.TIME_MACHINE:
+            duration = int(anim.get("timemachine_ms", self.character.timemachine_animation_ms))
+        elif state == PetState.DRINK:
+            duration = int(anim.get("drink_ms", 2200))
+        else:
+            duration = int(anim.get("eat_ms", self.character.eat_animation_ms))
+
+        # 随机动作不弹长气泡，保持轻量
+        self._enter_temporary(
+            state,
+            duration_ms=duration,
+            bubble=None,
+            still_hold_ms=IDLE_RANDOM_STILL_HOLD_MS,
+        )
 
     # ------------------------------------------------------------------
     # 状态同步
@@ -263,6 +341,8 @@ class DesktopPetApp:
             period=period,
         )
 
+    def _on_meal_remind(self, time_str: str, period: str) -> None:
+        self.start_meal_reminder(time_str=time_str, period=period)
 
     def start_meal_reminder(self, time_str: str = "", period: str = "用餐") -> None:
         """用餐锁定提醒（可接自定义时刻表）。"""
@@ -281,7 +361,7 @@ class DesktopPetApp:
 
 
     def debug_meal_remind(self) -> None:
-        self.start_meal_reminder(period="测试")
+        self.meal.force_remind("测试")
 
 
     def complete_reminder(self) -> None:
@@ -526,52 +606,131 @@ class DesktopPetApp:
 
 
     # ------------------------------------------------------------------
+    def quit_app(self, *, confirm: bool = True) -> None:
+        """关闭退出桌宠（停止 mainloop 并清理热键等）。"""
+        parent = self.root
+        try:
+            if self.panel.win and self.panel.win.winfo_exists():
+                parent = self.panel.win
+        except Exception:
+            pass
+        if confirm:
+            if not messagebox.askyesno(
+                "退出桌宠",
+                "确定要关闭桌宠吗？\n关闭后需重新运行程序才会出现。",
+                parent=parent,
+            ):
+                return
+        self._cleanup()
+        try:
+            self.root.quit()
+        except Exception:
+            pass
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
     def run(self) -> None:
         self.root.mainloop()
         self._cleanup()
 
 
     def _cleanup(self) -> None:
+        if self._random_idle_job:
+            try:
+                self.root.after_cancel(self._random_idle_job)
+            except Exception:
+                pass
+            self._random_idle_job = None
+        if self._temp_job:
+            try:
+                self.root.after_cancel(self._temp_job)
+            except Exception:
+                pass
+            self._temp_job = None
         if self._hotkeys_enabled:
             try:
                 import keyboard  # type: ignore
 
-
                 keyboard.unhook_all_hotkeys()
             except Exception:
                 pass
-
+            self._hotkeys_enabled = False
 
 
 # 向后兼容
 DoraemonPetApp = DesktopPetApp
 
 
-
 def main() -> int:
-    # 支持：python main.py --character codex_spark
+    """
+    入口参数：
+      --install          完整安装向导（自选安装目录 + 备忘录目录）
+      --setup            强制再跑一次初始设置（仅备忘录，当前目录运行）
+      --list-characters  列出角色
+      --character <id>   指定角色启动
+    """
     character_id = None
-    args = sys.argv[1:]
-    if "--character" in args:
-        i = args.index("--character")
-        if i + 1 < len(args):
-            character_id = args[i + 1]
-    elif args and not args[0].startswith("-"):
-        character_id = args[0]
+    args = list(sys.argv[1:])
 
+    if "--install" in args:
+        from ui.setup_wizard import SetupWizard
+
+        ok = SetupWizard(mode="install").run()
+        return 0 if ok else 1
 
     if "--list-characters" in args:
         ensure_builtin_packs()
         for p in discover_characters():
-            print(f"  {p.id:20s}  {p.name}  ({p.description[:40]}…)" if len(p.description) > 40 else f"  {p.id:20s}  {p.name}  {p.description}")
+            desc = p.description
+            if len(desc) > 40:
+                desc = desc[:40] + "…"
+            print(f"  {p.id:20s}  {p.name}  {desc}")
         print(f"\n角色目录: {CHARACTERS_DIR}")
         return 0
 
+    force_setup = "--setup" in args
+    from ui.setup_wizard import SetupWizard, needs_setup
+    from utils.install_util import find_app_source, find_main_exe
+
+    if force_setup or needs_setup():
+        # 打包 exe 首次启动：完整安装（自选目录）；开发模式：只配备忘录
+        if force_setup:
+            mode = "first_run"
+        elif getattr(sys, "frozen", False):
+            mode = "install"
+        else:
+            mode = "first_run"
+        wizard = SetupWizard(mode=mode)
+        ok = wizard.run()
+        if not ok:
+            if force_setup or needs_setup():
+                return 1
+        elif mode == "install":
+            # 已复制到新目录：从安装目录启动并退出当前进程
+            installed = find_main_exe(wizard.install_dir)
+            src = find_app_source()
+            if (
+                installed
+                and installed.suffix.lower() == ".exe"
+                and installed.parent.resolve() != src.resolve()
+            ):
+                import subprocess
+
+                subprocess.Popen([str(installed)], cwd=str(installed.parent))
+                return 0
+
+    if "--character" in args:
+        i = args.index("--character")
+        if i + 1 < len(args):
+            character_id = args[i + 1]
+    elif args and not args[0].startswith("-") and not args[0].startswith("--"):
+        character_id = args[0]
 
     app = DesktopPetApp(character_id=character_id)
     app.run()
     return 0
-
 
 
 if __name__ == "__main__":

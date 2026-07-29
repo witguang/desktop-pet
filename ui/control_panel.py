@@ -29,6 +29,8 @@ class ControlPanel:
         self._food_btn: ttk.Button | None = None
         self._memo_btn: ttk.Button | None = None
         self._settings_btn: ttk.Button | None = None
+        self._focus_trace: str | None = None
+        self._break_trace: str | None = None
 
     def toggle(self) -> None:
         if self.win and self.win.winfo_exists():
@@ -64,9 +66,18 @@ class ControlPanel:
         )
 
         ttk.Label(root_frame, text="专注 (分钟)").grid(row=2, column=0, sticky="w", **pad)
-        ttk.Entry(root_frame, textvariable=self.focus_var, width=8).grid(row=2, column=1, sticky="w", **pad)
+        focus_entry = ttk.Entry(root_frame, textvariable=self.focus_var, width=8)
+        focus_entry.grid(row=2, column=1, sticky="w", **pad)
         ttk.Label(root_frame, text="休息 (分钟)").grid(row=3, column=0, sticky="w", **pad)
-        ttk.Entry(root_frame, textvariable=self.break_var, width=8).grid(row=3, column=1, sticky="w", **pad)
+        break_entry = ttk.Entry(root_frame, textvariable=self.break_var, width=8)
+        break_entry.grid(row=3, column=1, sticky="w", **pad)
+        # 修改分钟数时立即同步番茄钟大字显示（空闲时）
+        self._focus_trace = self.focus_var.trace_add("write", self._on_minutes_edited)
+        self._break_trace = self.break_var.trace_add("write", self._on_minutes_edited)
+        focus_entry.bind("<KeyRelease>", self._on_minutes_edited)
+        break_entry.bind("<KeyRelease>", self._on_minutes_edited)
+        focus_entry.bind("<FocusOut>", self._on_minutes_edited)
+        break_entry.bind("<FocusOut>", self._on_minutes_edited)
 
         timer_frame = ttk.LabelFrame(root_frame, text="番茄钟", padding=8)
         timer_frame.grid(row=4, column=0, columnspan=3, sticky="ew", pady=8)
@@ -119,11 +130,20 @@ class ControlPanel:
         )
         self._settings_btn.pack(fill="x", pady=2)
 
+        # 退出：无边框窗口没有系统关闭钮，必须提供明确入口
+        exit_frame = ttk.Frame(root_frame)
+        exit_frame.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(8, 2))
+        ttk.Button(
+            exit_frame,
+            text="退出桌宠",
+            command=self.quit_app,
+        ).pack(fill="x")
+
         ttk.Label(root_frame, textvariable=self.meter_var).grid(
-            row=8, column=0, columnspan=3, sticky="w", **pad
+            row=9, column=0, columnspan=3, sticky="w", **pad
         )
         ttk.Label(root_frame, textvariable=self.tip_var, foreground="#555555", justify="left").grid(
-            row=9, column=0, columnspan=3, sticky="w", **pad
+            row=10, column=0, columnspan=3, sticky="w", **pad
         )
 
         win.update_idletasks()
@@ -138,6 +158,18 @@ class ControlPanel:
         self.refresh()
 
     def close(self) -> None:
+        if self._focus_trace is not None:
+            try:
+                self.focus_var.trace_remove("write", self._focus_trace)
+            except Exception:
+                pass
+            self._focus_trace = None
+        if self._break_trace is not None:
+            try:
+                self.break_var.trace_remove("write", self._break_trace)
+            except Exception:
+                pass
+            self._break_trace = None
         if self.win is not None:
             try:
                 self.win.destroy()
@@ -147,6 +179,21 @@ class ControlPanel:
             self._food_btn = None
             self._memo_btn = None
             self._settings_btn = None
+
+    def _on_minutes_edited(self, *_args: object) -> None:
+        """专注/休息分钟变化时，立即刷新番茄钟显示（运行中不打断剩余时间）。"""
+        try:
+            focus = int(self.focus_var.get().strip())
+            brk = int(self.break_var.get().strip())
+        except ValueError:
+            return
+        if focus <= 0 or brk <= 0:
+            return
+        timer = self.app.timer
+        timer.configure(focus_minutes=focus, break_minutes=brk)
+        # configure 在 IDLE 时会改 remaining；直接刷新大字
+        self.timer_label_var.set(timer.format_remaining())
+        self.mode_var.set("专注中" if timer.mode == TimerMode.FOCUS else "休息中")
 
     def on_character_changed(self) -> None:
         """角色切换后刷新标题与按钮文案。"""
@@ -164,18 +211,16 @@ class ControlPanel:
         self.refresh()
 
     def open_eat_drink_settings(self) -> None:
-        messagebox.showinfo(
-            "吃喝设置",
-            "吃喝提醒时刻表设置尚未接入 UI。\n"
-            "当前使用 config.py 中的 WATER_REMINDERS / MEAL_REMINDERS。",
-            parent=self.win or self.app.root,
-        )
+        self.app.open_eat_drink_settings()
 
     def open_main_settings(self) -> None:
         self.app.open_main_settings()
 
     def open_memo(self) -> None:
         self.app.open_memo()
+
+    def quit_app(self) -> None:
+        self.app.quit_app(confirm=True)
 
     def _parse_minutes(self) -> tuple[int, int] | None:
         try:

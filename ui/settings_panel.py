@@ -1,4 +1,4 @@
-"""主设置：备忘录目录 + GitHub 更新（含加速代理）。"""
+"""主设置：备忘录目录 + 开机自启 + GitHub 更新（含加速代理）。"""
 from __future__ import annotations
 
 import threading
@@ -8,7 +8,10 @@ from typing import TYPE_CHECKING
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+import sys
+
 from data.settings import default_memo_dir
+from utils import autostart
 from utils.updater import (
     BUILTIN_GH_PROXIES,
     check_update,
@@ -16,6 +19,10 @@ from utils.updater import (
     proxy_chain_from_settings,
     read_local_version,
 )
+
+
+def sys_platform_is_win() -> bool:
+    return sys.platform.startswith("win")
 
 if TYPE_CHECKING:
     from app import DesktopPetApp
@@ -32,6 +39,8 @@ class SettingsPanel:
         self._custom_proxy_var = tk.StringVar()
         self._update_status = tk.StringVar()
         self._version_var = tk.StringVar()
+        self._autostart_var = tk.BooleanVar(value=False)
+        self._autostart_hint = tk.StringVar()
         self._busy = False
 
     def open(self) -> None:
@@ -100,9 +109,35 @@ class SettingsPanel:
             row=2, column=0, sticky="w", pady=(8, 0)
         )
 
+        # ---- 开机自启 / 退出 ----
+        gen = ttk.LabelFrame(frame, text="启动与退出", padding=10)
+        gen.grid(row=3, column=0, columnspan=3, sticky="ew", pady=8)
+        gen.columnconfigure(0, weight=1)
+
+        cb = ttk.Checkbutton(
+            gen,
+            text="开机自启（登录 Windows 后自动运行桌宠）",
+            variable=self._autostart_var,
+            command=self._on_autostart_toggle,
+        )
+        cb.grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            gen,
+            textvariable=self._autostart_hint,
+            foreground="#666666",
+            wraplength=460,
+            justify="left",
+        ).grid(row=1, column=0, sticky="w", pady=(4, 8))
+        ttk.Button(
+            gen,
+            text="退出桌宠",
+            command=self._quit_app,
+            width=14,
+        ).grid(row=2, column=0, sticky="w")
+
         # ---- 软件更新 ----
         upd = ttk.LabelFrame(frame, text="软件更新（GitHub）", padding=10)
-        upd.grid(row=3, column=0, columnspan=3, sticky="ew", pady=8)
+        upd.grid(row=4, column=0, columnspan=3, sticky="ew", pady=8)
         upd.columnconfigure(1, weight=1)
 
         self._version_var.set(f"本地版本：{read_local_version()}")
@@ -157,14 +192,24 @@ class SettingsPanel:
         tip = ttk.Label(
             frame,
             text="热键：Ctrl+Shift+D 生成道具 · Ctrl+Shift+P 面板 · Ctrl+Shift+C 角色\n"
-            "更新不会覆盖 data_store（设置、任务日志、备忘录历史）。",
+            "更新不会覆盖 data_store（设置、任务日志、备忘录历史）。\n"
+            "退出：本页或控制面板底部「退出桌宠」。",
             foreground="#666666",
             justify="left",
         )
-        tip.grid(row=4, column=0, columnspan=3, sticky="w", pady=(12, 4))
+        tip.grid(row=5, column=0, columnspan=3, sticky="w", pady=(12, 4))
+
+        setup_row = ttk.Frame(frame)
+        setup_row.grid(row=6, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        ttk.Button(
+            setup_row,
+            text="重新运行安装/路径向导…",
+            command=self._rerun_setup,
+            width=22,
+        ).pack(side="left")
 
         btns = ttk.Frame(frame)
-        btns.grid(row=5, column=0, columnspan=3, sticky="e", pady=(12, 0))
+        btns.grid(row=7, column=0, columnspan=3, sticky="e", pady=(12, 0))
         ttk.Button(btns, text="保存设置", command=self._save, width=12).pack(side="left", padx=4)
         ttk.Button(btns, text="关闭", command=self.close, width=10).pack(side="left", padx=4)
 
@@ -205,6 +250,12 @@ class SettingsPanel:
         if hasattr(self, "_custom_text") and self._custom_text:
             self._custom_text.delete("1.0", tk.END)
             self._custom_text.insert("1.0", "\n".join(s.custom_gh_proxies))
+        # 开机自启：以系统 Startup 快捷方式为准，并同步到设置
+        enabled = autostart.is_enabled()
+        self._autostart_var.set(enabled)
+        if s.autostart != enabled:
+            s.autostart = enabled
+        self._refresh_autostart_hint()
 
     def _selected_proxy(self) -> str:
         v = self._proxy_var.get().strip()
@@ -258,9 +309,43 @@ class SettingsPanel:
         s.github_branch = self._branch_var.get().strip() or "main"
         s.gh_proxy = self._selected_proxy() or "direct"
         s.custom_gh_proxies = self._read_custom_proxies()
+        # 开机自启：保存时再同步一次（勾选时已即时生效）
+        want = bool(self._autostart_var.get())
+        ok, msg = autostart.set_enabled(want)
+        s.autostart = want and ok
+        if not ok and want:
+            self._autostart_var.set(False)
+            messagebox.showwarning("开机自启", msg, parent=self.win)
+            return
+        self._refresh_autostart_hint()
         # 刷新下拉
         self._proxy_combo["values"] = self._proxy_choices()
         messagebox.showinfo("主设置", "设置已保存。", parent=self.win)
+
+    def _refresh_autostart_hint(self) -> None:
+        if not sys_platform_is_win():
+            self._autostart_hint.set("当前系统非 Windows，开机自启不可用。")
+            return
+        sc = autostart.shortcut_path()
+        if self._autostart_var.get() and autostart.is_enabled():
+            self._autostart_hint.set(f"已启用 · 启动项：{sc}")
+        elif self._autostart_var.get():
+            self._autostart_hint.set("已勾选，但启动项未写入成功，请重新勾选或点「保存设置」。")
+        else:
+            self._autostart_hint.set("未启用。勾选后会在「启动」文件夹创建 DesktopPet 快捷方式。")
+
+    def _on_autostart_toggle(self) -> None:
+        want = bool(self._autostart_var.get())
+        ok, msg = autostart.set_enabled(want)
+        self.app.settings.autostart = want and ok
+        if not ok:
+            self._autostart_var.set(False)
+            self.app.settings.autostart = False
+            messagebox.showwarning("开机自启", msg, parent=self.win)
+        self._refresh_autostart_hint()
+
+    def _quit_app(self) -> None:
+        self.app.quit_app(confirm=True)
 
     def _proxy_chain(self) -> list[str]:
         return proxy_chain_from_settings(
@@ -376,6 +461,26 @@ class SettingsPanel:
         repo = self._repo_var.get().strip() or self.app.settings.github_repo
         url = f"https://github.com/{repo.removeprefix('https://github.com/').strip('/')}"
         webbrowser.open(url)
+
+    def _rerun_setup(self) -> None:
+        from ui.setup_wizard import SetupWizard
+
+        # 允许改安装位置：完整安装；仅改路径用 first_run 也可
+        if not messagebox.askyesno(
+            "安装向导",
+            "将打开安装向导。\n"
+            "「完整安装」可复制到新目录；完成后请从新位置启动。\n\n是否继续？",
+            parent=self.win,
+        ):
+            return
+        self.close()
+        SetupWizard(mode="install").run()
+        # 刷新当前设置显示
+        self.app.apply_reminder_schedules()
+        try:
+            self.open()
+        except Exception:
+            pass
 
     def close(self) -> None:
         if self.win is not None:

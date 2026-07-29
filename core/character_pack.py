@@ -76,7 +76,8 @@ _DEFAULT_UI: dict[str, str] = {
     "meter_label": "饥饿值: {value} / {max}",
     "tip_line": (
         "拖动桌宠移动 · 右键打开本面板 · 双击生成{food}\n"
-        "快捷键：{food} Ctrl+Shift+D · 面板 Ctrl+Shift+P · 角色 Ctrl+Shift+C"
+        "快捷键：{food} Ctrl+Shift+D · 面板 Ctrl+Shift+P · 角色 Ctrl+Shift+C\n"
+        "退出：本面板底部「退出桌宠」"
     ),
     "memo_button": "备忘录 📝",
     "settings_button": "主设置 ⚙",

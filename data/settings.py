@@ -6,12 +6,36 @@ import json
 from pathlib import Path
 from typing import Any
 
-from config import DATA_DIR, DEFAULT_CHARACTER_ID, DEFAULT_MEMO_DIR_NAME, SETTINGS_FILE
+from config import (
+    DATA_DIR,
+    DEFAULT_CHARACTER_ID,
+    DEFAULT_MEMO_DIR_NAME,
+    MEAL_REMINDERS,
+    SETTINGS_FILE,
+    WATER_REMINDERS,
+)
 from utils.updater import BUILTIN_GH_PROXIES, DEFAULT_GITHUB_BRANCH, DEFAULT_GITHUB_REPO
 
 
 def default_memo_dir() -> Path:
     return DATA_DIR / DEFAULT_MEMO_DIR_NAME
+
+
+def _parse_schedule(raw: Any, fallback: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    if not isinstance(raw, list) or not raw:
+        return list(fallback)
+    out: list[tuple[str, str]] = []
+    for item in raw:
+        if isinstance(item, (list, tuple)) and len(item) >= 2:
+            t, p = str(item[0]).strip(), str(item[1]).strip()
+            if t:
+                out.append((t, p or "提醒"))
+        elif isinstance(item, dict):
+            t = str(item.get("time") or item.get("t") or "").strip()
+            p = str(item.get("period") or item.get("label") or "提醒").strip()
+            if t:
+                out.append((t, p))
+    return out or list(fallback)
 
 
 class Settings:
@@ -104,6 +128,35 @@ class Settings:
         else:
             items = [str(x).strip() for x in value if str(x).strip()]
         self._data["custom_gh_proxies"] = items
+        self.save()
+
+    # ---- 吃喝提醒时刻表 ----
+    @property
+    def water_reminders(self) -> list[tuple[str, str]]:
+        return _parse_schedule(self._data.get("water_reminders"), list(WATER_REMINDERS))
+
+    @water_reminders.setter
+    def water_reminders(self, value: list[tuple[str, str]]) -> None:
+        self._data["water_reminders"] = [[t, p] for t, p in value]
+        self.save()
+
+    @property
+    def meal_reminders(self) -> list[tuple[str, str]]:
+        return _parse_schedule(self._data.get("meal_reminders"), list(MEAL_REMINDERS))
+
+    @meal_reminders.setter
+    def meal_reminders(self, value: list[tuple[str, str]]) -> None:
+        self._data["meal_reminders"] = [[t, p] for t, p in value]
+        self.save()
+
+    # ---- 开机自启（偏好；实际以系统 Startup 快捷方式为准）----
+    @property
+    def autostart(self) -> bool:
+        return bool(self._data.get("autostart", False))
+
+    @autostart.setter
+    def autostart(self, value: bool) -> None:
+        self._data["autostart"] = bool(value)
         self.save()
 
     def get(self, key: str, default: Any = None) -> Any:

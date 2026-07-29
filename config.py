@@ -5,22 +5,46 @@
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# 路径
+# 路径（支持 PyInstaller 打包）
 # ---------------------------------------------------------------------------
-BASE_DIR = Path(__file__).resolve().parent
-CHARACTERS_DIR = BASE_DIR / "characters"
+def _resolve_base_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        # onedir: 可执行文件旁；onefile: 解压目录
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            # onefile 资源在 _MEIPASS，用户数据放 exe 旁
+            return Path(sys.executable).resolve().parent
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+def resource_dir() -> Path:
+    """只读资源目录（角色包、内置 assets）。"""
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            return Path(meipass)
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+BASE_DIR = _resolve_base_dir()
+RESOURCE_DIR = resource_dir()
+CHARACTERS_DIR = RESOURCE_DIR / "characters"
+# 用户数据始终在 exe / 项目旁，便于更新不丢
 DATA_DIR = BASE_DIR / "data_store"
 LOG_FILE = DATA_DIR / "task_logs.json"
 SETTINGS_FILE = DATA_DIR / "settings.json"
 
 # 默认角色（首次启动 / 角色包缺失时回退）
-DEFAULT_CHARACTER_ID = "doraemon"
+DEFAULT_CHARACTER_ID = "kiki"
 
 # 兼容旧路径：若仍有根目录 assets/，可作为最后回退
-LEGACY_ASSETS_DIR = BASE_DIR / "assets"
+LEGACY_ASSETS_DIR = RESOURCE_DIR / "assets"
 
 # ---------------------------------------------------------------------------
 # 番茄钟默认值（分钟）— 引擎级，角色包可覆盖
@@ -60,9 +84,11 @@ WATER_REMINDERS = [
 ]
 MEAL_REMINDERS = [
     ("09:00", "早餐"),
-    ("11:00", "午餐"),
+    ("12:00", "午餐"),
     ("18:00", "晚餐"),
+    ("22:00", "宵夜"),
 ]
+MEAL_PERIOD_OPTIONS = ("早餐", "午餐", "晚餐", "宵夜")
 WATER_REMINDER_DURATION_MS = 12_000
 WATER_CHECK_INTERVAL_MS = 15_000
 DEFAULT_MEMO_DIR_NAME = "memos"
@@ -87,6 +113,17 @@ TIMEMACHINE_ANIMATION_MS = 3000
 DEFAULT_PET_SIZE = (128, 128)
 DEFAULT_FOOD_SIZE = (48, 48)
 DEFAULT_TRANSPARENT_COLOR = "#010101"
+
+# ---------------------------------------------------------------------------
+# 空闲随机动作（增强生动感）
+# ---------------------------------------------------------------------------
+# 两次随机动作之间的间隔（秒）
+IDLE_RANDOM_MIN_SEC = 25
+IDLE_RANDOM_MAX_SEC = 70
+# 随机动作定格 PNG 后再停留多久回 idle
+IDLE_RANDOM_STILL_HOLD_MS = 2200
+# 可参与随机的状态（角色包无该状态则自动跳过）
+IDLE_RANDOM_STATES = ("fly", "eat", "timemachine", "drink")
 
 # 标准状态键（角色包必须至少提供 idle；其余缺失时回退 idle 或程序占位）
 REQUIRED_STATES = ("idle",)

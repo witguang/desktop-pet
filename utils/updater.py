@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from config import BASE_DIR
+from config import BASE_DIR, RESOURCE_DIR
 
 # 内置代理前缀（末尾建议带 /）
 BUILTIN_GH_PROXIES: list[str] = [
@@ -54,10 +54,19 @@ class UpdateInfo:
 
 
 def read_local_version(base: Path | None = None) -> str:
-    root = base or BASE_DIR
-    path = root / "VERSION"
-    if path.exists():
-        return path.read_text(encoding="utf-8").strip() or "0.0.0"
+    candidates = []
+    if base is not None:
+        candidates.append(Path(base))
+    candidates.extend([BASE_DIR, RESOURCE_DIR])
+    seen: set[str] = set()
+    for root in candidates:
+        key = str(root)
+        if key in seen:
+            continue
+        seen.add(key)
+        path = root / "VERSION"
+        if path.exists():
+            return path.read_text(encoding="utf-8").strip() or "0.0.0"
     return "0.0.0"
 
 

@@ -79,11 +79,14 @@ class PetStateMachine:
         self._set(state)
 
     def leave_temporary(self) -> None:
-        """临时状态结束，回到基础状态。"""
-        self._state = PetState.IDLE
+        """临时状态结束，回到基础状态（始终通知 UI，避免仍停在 fly/eat 静态图）。"""
         if self._focusing:
-            self._set(PetState.FOCUS)
+            target = PetState.FOCUS
         elif self._hungry:
-            self._set(PetState.HUNGRY)
+            target = PetState.HUNGRY
         else:
-            self._set(PetState.IDLE)
+            target = PetState.IDLE
+        old = self._state
+        self._state = target
+        # 即使 target 与强制写入后相同，也要从 FLY/EAT 等视觉态刷新到 idle
+        self._emit(old, target)
