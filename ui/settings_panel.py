@@ -176,13 +176,13 @@ class SettingsPanel:
 
         ttk.Checkbutton(
             upd,
-            text="更新后自动重启（无需手动关闭 · 推荐开启）",
+            text="✓ 更新后自动重启（默认开启 · 无需手动关闭桌宠）",
             variable=self._auto_restart_var,
             command=self._on_auto_restart_toggle,
         ).grid(row=7, column=0, columnspan=3, sticky="w", pady=(4, 0))
         ttk.Label(
             upd,
-            text="开启后：安装完成会自动结束旧进程并启动新桌宠，不用找退出按钮。",
+            text="勾选后点「立即更新」：装完会自动结束当前进程并启动新桌宠，不用你手动关。",
             foreground="#1565C0",
             font=("Microsoft YaHei UI", 8),
             wraplength=460,
@@ -421,19 +421,20 @@ class SettingsPanel:
     def _do_update(self) -> None:
         if self._busy:
             return
-        # 以当前勾选为准（即时写入设置）
+        # 默认强制走自动重启；仅当用户主动取消勾选时才手动退出
         do_restart = bool(self._auto_restart_var.get())
         self.app.settings.auto_restart_after_update = do_restart
         if do_restart:
             restart_hint = (
-                "已勾选「更新后自动重启」：\n"
-                "安装完成后会自动结束旧进程并启动新桌宠，\n"
-                "无需你手动关闭。"
+                "【自动重启已开启】\n"
+                "安装完成后会自动结束当前桌宠并启动新版本，\n"
+                "你不需要手动关闭。"
             )
         else:
             restart_hint = (
-                "未勾选自动重启：安装完成后需手动点「退出桌宠」再打开。\n"
-                "（若找不到退出，请勾选上方自动重启后再更新。）"
+                "【自动重启已关闭】\n"
+                "装完后需自己点「退出桌宠」再打开。\n"
+                "若关不掉，请勾选上方「更新后自动重启」后再更新。"
             )
         if not messagebox.askyesno(
             "立即更新",
@@ -449,19 +450,21 @@ class SettingsPanel:
 
         def work() -> None:
             try:
-                # auto_restart 在 download_and_apply 内就会安排脚本重启
+                # 安装成功后在 download_and_apply 内立刻安排独立脚本重启
                 used = download_and_apply(
                     repo=self.app.settings.github_repo,
                     branch=self.app.settings.github_branch,
                     proxies=self._proxy_chain(),
                     progress=lambda m: self._set_status(m),
                     auto_restart=do_restart,
+                    allow_downgrade=False,
+                    restart_delay_sec=3.0,
                 )
                 ver = read_local_version()
                 if do_restart:
                     self._set_status(
                         f"更新完成 · VERSION={ver}\n来源: {used}\n"
-                        "已安排自动重启（约 2 秒），无需手动关闭。"
+                        "已安排自动重启（约 3 秒），无需手动关闭。"
                     )
                 else:
                     self._set_status(
@@ -473,16 +476,18 @@ class SettingsPanel:
                     parent = self.win if self.win and self.win.winfo_exists() else None
                     try:
                         if do_restart:
-                            # 不阻塞太久：脚本已在跑，点确定后尝试优雅退出
-                            messagebox.showinfo(
-                                "更新完成 · 即将自动重启",
-                                f"已更新到 VERSION {ver}\n\n"
-                                "无需手动关闭桌宠。\n"
-                                "约 2 秒后会自动结束本进程并启动新版本。\n"
-                                "请点「确定」。",
-                                parent=parent,
-                            )
-                            # 再兜底一次（download_and_apply 里已安排过）
+                            # 脚本已在倒计时：尽量不阻塞；点确定后优雅退出作辅助
+                            try:
+                                messagebox.showinfo(
+                                    "更新完成 · 即将自动重启",
+                                    f"已更新到 VERSION {ver}\n\n"
+                                    "无需手动关闭桌宠。\n"
+                                    "约 3 秒内会自动结束本进程并打开新版本。\n"
+                                    "（若本窗未消失，点确定即可。）",
+                                    parent=parent,
+                                )
+                            except Exception:
+                                pass
                             try:
                                 self.app.quit_app(confirm=False)
                             except Exception:
@@ -492,7 +497,8 @@ class SettingsPanel:
                                 "更新完成",
                                 f"已更新到 VERSION {ver}\n\n"
                                 "当前未开启自动重启。\n"
-                                "请打开控制面板 →「退出桌宠」，再重新运行程序。",
+                                "请打开控制面板 →「退出桌宠」，再重新运行程序。\n\n"
+                                "下次更新前勾选「更新后自动重启」即可免手动关闭。",
                                 parent=parent,
                             )
                     except Exception:

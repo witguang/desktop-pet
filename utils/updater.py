@@ -294,8 +294,9 @@ def schedule_relaunch(
     kill_pid: int | None = None,
 ) -> tuple[bool, str]:
     """
-    写独立脚本：延迟 → 启动新桌宠 → 强制结束旧进程。
-    不依赖当前 Tk 能否正常 quit，解决「无退出按钮 / 关不掉」问题。
+    写独立脚本：延迟 → 强制结束旧进程 → 启动新桌宠。
+    不依赖当前 Tk 能否正常 quit，解决「无退出按钮 / 关不掉 / 需手动关闭」问题。
+    脚本与当前进程分离，即使本进程卡死也会被 taskkill 掉。
     """
     cmd, cwd = resolve_relaunch_command()
     cwd = Path(cwd)
@@ -313,13 +314,14 @@ def schedule_relaunch(
             n = max(2, int(delay) + 1)
             # 每段参数单独加引号，避免路径空格
             start_parts = " ".join(f'"{part}"' for part in cmd)
+            # 先杀旧再启新：避免双开，且不依赖用户点「退出」
             lines = [
                 "@echo off",
                 f"ping -n {n} 127.0.0.1 >nul",
+                f"taskkill /PID {pid} /F >nul 2>&1",
+                "ping -n 2 127.0.0.1 >nul",
                 f'cd /d "{cwd}"',
                 f'start "" {start_parts}',
-                "ping -n 2 127.0.0.1 >nul",
-                f"taskkill /PID {pid} /F >nul 2>&1",
                 'del "%~f0" >nul 2>&1',
             ]
             helper.write_text("\r\n".join(lines) + "\r\n", encoding="gbk", errors="replace")
@@ -346,11 +348,11 @@ def schedule_relaunch(
             script = (
                 "#!/bin/sh\n"
                 f"sleep {delay}\n"
+                f"kill -9 {pid} 2>/dev/null || true\n"
+                f"sleep 0.5\n"
                 f"cd {shlex_quote(str(cwd))}\n"
                 + " ".join(shlex_quote(c) for c in cmd)
                 + " &\n"
-                f"sleep 0.5\n"
-                f"kill -9 {pid} 2>/dev/null || true\n"
                 f"rm -f {shlex_quote(str(helper))}\n"
             )
             helper.write_text(script, encoding="utf-8")
@@ -363,7 +365,7 @@ def schedule_relaunch(
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
-        return True, f"已安排约 {delay:.0f}s 后重启并结束旧进程 PID={pid}"
+        return True, f"已安排约 {delay:.0f}s 后自动结束旧进程并启动新桌宠 (PID={pid})"
     except Exception as exc:  # noqa: BLE001
         return False, f"安排重启失败: {exc}"
 
@@ -385,6 +387,9 @@ def download_and_apply(
     target: Path | None = None,
     progress: ProgressCb | None = None,
     auto_restart: bool | None = None,
+    *,
+    allow_downgrade: bool = False,
+    restart_delay_sec: float = 3.0,
 ) -> str:
     """
     下载 zip 并覆盖安装。返回使用的下载 URL。
@@ -392,17 +397,41 @@ def download_and_apply(
     auto_restart:
       - None: 读设置 auto_restart_after_update（默认 True）
       - True/False: 强制指定
-    为 True 时，安装完成后立刻安排「启动新进程 + 结束当前进程」，
-    调用方不必再让用户手动关桌宠。
+    为 True 时，安装完成后立刻安排「结束旧进程 + 启动新桌宠」，
+    用户无需手动关闭。
+
+    allow_downgrade=False 时，若远程 VERSION 不高于本地则拒绝覆盖，
+    避免把已修好的自动重启等功能又降回旧版。
     """
     owner, name = parse_repo(repo)
-    zip_url = f"https://github.com/{owner}/{name}/archive/refs/heads/{branch}.zip"
     proxy_list = proxies if proxies is not None else [""] + BUILTIN_GH_PROXIES
     log = progress or (lambda _m: None)
+
+    dest = target or BASE_DIR
+    local_ver = read_local_version(dest)
+    try:
+        remote_ver, _ver_url = fetch_remote_version(repo, branch, proxy_list)
+    except Exception as exc:  # noqa: BLE001
+        remote_ver = ""
+        log(f"预读远程版本失败（仍将尝试下载包）: {exc}")
+
+    if remote_ver and not allow_downgrade:
+        if not is_newer(remote_ver, local_ver):
+            if version_tuple(remote_ver) == version_tuple(local_ver):
+                raise RuntimeError(
+                    f"远程与本地版本相同（{local_ver}），无需更新。\n"
+                    "若只想重装，请勾选强制安装后再试（开发用途）。"
+                )
+            raise RuntimeError(
+                f"远程版本 {remote_ver} 不高于本地 {local_ver}，已取消覆盖，"
+                "以免降级丢失「更新后自动重启」等功能。\n"
+                "请先把新版本推送到 GitHub，或等待远程发布更新。"
+            )
+
+    zip_url = f"https://github.com/{owner}/{name}/archive/refs/heads/{branch}.zip"
     log("正在下载更新包…")
     data, used = _try_get(candidate_urls(zip_url, proxy_list), timeout=60.0)
     log(f"下载完成（{len(data) // 1024} KB），正在安装…")
-    dest = target or BASE_DIR
     apply_zip_update(data, dest, progress=log)
 
     # 打包版：代码在 RESOURCE_DIR（_internal），尽量同步一份
@@ -417,12 +446,18 @@ def download_and_apply(
     except Exception as exc:  # noqa: BLE001
         log(f"资源目录同步跳过: {exc}")
 
+    # 默认自动重启；只有用户明确关掉时才跳过
     do_restart = read_auto_restart_preference() if auto_restart is None else bool(auto_restart)
     if do_restart:
-        ok, msg = schedule_relaunch(delay_sec=2.0, kill_pid=os.getpid())
+        ok, msg = schedule_relaunch(
+            delay_sec=restart_delay_sec,
+            kill_pid=os.getpid(),
+        )
         log(msg if ok else f"自动重启未成功: {msg}")
+        if not ok:
+            log("请改用控制面板「退出桌宠」后重新运行，或勾选自动重启再试一次更新。")
     else:
-        log("已关闭「更新后自动重启」，请手动退出后重新打开桌宠。")
+        log("已关闭「更新后自动重启」：请点控制面板「退出桌宠」后再打开。")
     return used
 
 
