@@ -1,0 +1,123 @@
+{
+  "id": "doraemon",
+  "name": "哆啦A梦",
+  "name_en": "Doraemon",
+  "version": "1.0.0",
+  "author": "builtin",
+  "description": "经典蓝胖子桌宠。双击生成铜锣烧，拖到身边喂食。",
+  "preview": "preview.png",
+  "display": {
+    "pet_size": [
+      128,
+      128
+    ],
+    "food_size": [
+      48,
+      48
+    ],
+    "transparent_color": "#010101"
+  },
+  "food": {
+    "id": "dorayaki",
+    "name": "铜锣烧",
+    "emoji": "🍩",
+    "file": "food.png"
+  },
+  "states": {
+    "idle": {
+      "file": "idle.png",
+      "label": "待机"
+    },
+    "focus": {
+      "file": "focus.png",
+      "label": "专注"
+    },
+    "eat": {
+      "file": "eat.gif",
+      "label": "吃铜锣烧"
+    },
+    "timemachine": {
+      "file": "timemachine.gif",
+      "label": "时光机"
+    },
+    "drink": {
+      "file": "drink.png",
+      "label": "喝水"
+    },
+    "hungry": {
+      "file": "hungry.png",
+      "label": "饥饿"
+    }
+  },
+  "animation": {
+    "eat_ms": 2200,
+    "timemachine_ms": 3000,
+    "frame_ms": 120
+  },
+  "dialogues": {
+    "greeting": [
+      "你好！我是哆啦A梦~",
+      "右键打开控制面板，一起加油吧！"
+    ],
+    "hungry": [
+      "肚子饿了…想吃铜锣烧 🍩",
+      "双击我或 Ctrl+Shift+D 生成铜锣烧"
+    ],
+    "spawn_food": [
+      "铜锣烧来了！拖到我身边~",
+      "哇，铜锣烧！"
+    ],
+    "eat": [
+      "好好吃！谢谢你~",
+      "铜锣烧最棒了！"
+    ],
+    "water": [
+      "💧 {period}喝水时间\n（{time}）点「已喝完」才算数哦"
+    ],
+    "meal": [
+      "🍽 {period}时间到\n（{time}）铜锣烧配白开水~\n点「已用餐」打卡"
+    ],
+    "focus_start": [
+      "开始专注：{task}"
+    ],
+    "break_start": [
+      "休息一下吧 ☕"
+    ],
+    "paused": [
+      "已暂停 ⏸"
+    ],
+    "reset": [
+      "番茄钟已重置"
+    ],
+    "focus_done": [
+      "专注完成！🎉"
+    ],
+    "break_done": [
+      "休息结束，继续加油！"
+    ],
+    "task_done": [
+      "任务完成！✓"
+    ],
+    "timemachine": [
+      "启动时光机 ⏳"
+    ],
+    "character_switched": [
+      "哆啦A梦报到！"
+    ]
+  },
+  "gameplay": {
+    "meter": "hunger"
+  },
+  "ui": {
+    "panel_title": "{name} · 控制面板",
+    "spawn_food_button": "生成{food} {food_emoji}",
+    "timemachine_button": "时光机 · 历史回顾 ⏳",
+    "timemachine_title": "时光机 · 历史回顾",
+    "character_button": "切换角色 🎭",
+    "status_line": "角色：{name}  ·  食物：{food} {food_emoji}",
+    "meter_label": "饥饿值: {value} / {max}",
+    "tip_line": "拖动桌宠移动 · 右键打开本面板 · 双击生成{food}\n快捷键：{food} Ctrl+Shift+D · 面板 Ctrl+Shift+P · 角色 Ctrl+Shift+C",
+    "memo_button": "备忘录 📝",
+    "settings_button": "主设置 ⚙"
+  }
+}

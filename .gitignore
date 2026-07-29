@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv/
+venv/
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+
+# 用户数据与本地历史（更新器也不会覆盖 data_store）
+data_store/
+!data_store/.gitkeep
+
+# 本地参考素材 / 生成缓存
+ref/
+assets/characters/
+
+# IDE
+.idea/
+.vscode/
+*.swp
