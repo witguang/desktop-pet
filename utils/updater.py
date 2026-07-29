@@ -455,8 +455,14 @@ def download_and_apply(
     except Exception as exc:  # noqa: BLE001
         log(f"资源目录同步跳过: {exc}")
 
-    # 默认自动重启；只有用户明确关掉时才跳过
-    do_restart = read_auto_restart_preference() if auto_restart is None else bool(auto_restart)
+    # 默认自动重启。打包版强制自动重启：旧 UI 无勾选项时也要能直接起来。
+    if auto_restart is None:
+        do_restart = True if getattr(sys, "frozen", False) else read_auto_restart_preference()
+    else:
+        do_restart = bool(auto_restart)
+    if getattr(sys, "frozen", False):
+        do_restart = True
+
     if do_restart:
         ok, msg = schedule_relaunch(
             delay_sec=restart_delay_sec,
@@ -464,7 +470,28 @@ def download_and_apply(
         )
         log(msg if ok else f"自动重启未成功: {msg}")
         if not ok:
-            log("请改用控制面板「退出桌宠」后重新运行，或勾选自动重启再试一次更新。")
+            log("自动重启脚本失败：将尝试直接拉起新进程。")
+            # 最后兜底：直接 start 新实例（新进程 claim_instance 会清旧进程）
+            try:
+                cmd, cwd = resolve_relaunch_command()
+                subprocess.Popen(
+                    cmd,
+                    cwd=str(cwd),
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    close_fds=True,
+                    creationflags=(
+                        getattr(subprocess, "DETACHED_PROCESS", 0)
+                        | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                        | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                    )
+                    if sys.platform.startswith("win")
+                    else 0,
+                )
+                log("已直接启动新实例（接管旧进程）。")
+            except Exception as exc:  # noqa: BLE001
+                log(f"兜底启动失败: {exc}")
     else:
         log("已关闭「更新后自动重启」：请点控制面板「退出桌宠」后再打开。")
     return used

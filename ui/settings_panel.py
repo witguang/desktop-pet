@@ -421,20 +421,22 @@ class SettingsPanel:
     def _do_update(self) -> None:
         if self._busy:
             return
-        # 默认强制走自动重启；仅当用户主动取消勾选时才手动退出
-        do_restart = bool(self._auto_restart_var.get())
+        # 打包版始终自动重启；开发模式跟勾选
+        import sys as _sys
+
+        do_restart = True if getattr(_sys, "frozen", False) else bool(self._auto_restart_var.get())
         self.app.settings.auto_restart_after_update = do_restart
         if do_restart:
             restart_hint = (
-                "【自动重启已开启】\n"
-                "安装完成后会自动结束当前桌宠并启动新版本，\n"
-                "你不需要手动关闭。"
+                "【直接自动重启】\n"
+                "安装完成后会强制结束当前进程并启动新桌宠，\n"
+                "你不需要手动关闭或退出。"
             )
         else:
             restart_hint = (
                 "【自动重启已关闭】\n"
                 "装完后需自己点「退出桌宠」再打开。\n"
-                "若关不掉，请勾选上方「更新后自动重启」后再更新。"
+                "建议勾选上方「更新后自动重启」。"
             )
         if not messagebox.askyesno(
             "立即更新",

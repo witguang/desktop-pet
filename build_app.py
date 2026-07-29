@@ -87,6 +87,10 @@ def main() -> int:
     if not exe.exists():
         print("ERROR: build finished but exe not found:", exe)
         return 1
+
+    # 把业务源码拷到 exe 旁，供 GitHub 源码更新 + external_source 热加载
+    _copy_sources_beside_exe(main_dir)
+
     print("OK:", exe)
     setup = main_dir / "DesktopPetSetup.exe"
     if setup.exists():
@@ -94,6 +98,41 @@ def main() -> int:
     print("Share the whole folder: dist/DesktopPet/")
     print("Friends can run DesktopPetSetup.exe to pick install + memo folders.")
     return 0
+
+
+def _copy_sources_beside_exe(main_dir: Path) -> None:
+    """Copy pure-Python app tree next to DesktopPet.exe for in-place updates."""
+    patterns = [
+        "main.py",
+        "app.py",
+        "config.py",
+        "VERSION",
+        "requirements.txt",
+        "README.md",
+        ".gitignore",
+        "DesktopPet.spec",
+        "build_app.py",
+        "build_app.bat",
+        "install_app.py",
+    ]
+    dirs = ["core", "data", "ui", "utils", "characters", "assets"]
+    for name in patterns:
+        src = ROOT / name
+        if src.is_file():
+            shutil.copy2(src, main_dir / name)
+    for d in dirs:
+        src = ROOT / d
+        dst = main_dir / d
+        if not src.is_dir():
+            continue
+        if dst.exists():
+            shutil.rmtree(dst, ignore_errors=True)
+        shutil.copytree(
+            src,
+            dst,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".memo_history"),
+        )
+    print("Copied source tree beside exe for hot update.")
 
 
 if __name__ == "__main__":
