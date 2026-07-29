@@ -209,6 +209,18 @@ class Settings:
         self._data["autostart"] = bool(value)
         self.save()
 
+    # ---- 更新后自动重启（默认开：方便无法手动退出的旧版本）----
+    @property
+    def auto_restart_after_update(self) -> bool:
+        if "auto_restart_after_update" not in self._data:
+            return True
+        return bool(self._data.get("auto_restart_after_update"))
+
+    @auto_restart_after_update.setter
+    def auto_restart_after_update(self, value: bool) -> None:
+        self._data["auto_restart_after_update"] = bool(value)
+        self.save()
+
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)
 

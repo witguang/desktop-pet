@@ -41,6 +41,7 @@ class SettingsPanel:
         self._version_var = tk.StringVar()
         self._autostart_var = tk.BooleanVar(value=False)
         self._autostart_hint = tk.StringVar()
+        self._auto_restart_var = tk.BooleanVar(value=True)
         self._busy = False
 
     def open(self) -> None:
@@ -173,8 +174,22 @@ class SettingsPanel:
             font=("Microsoft YaHei UI", 8),
         ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(4, 6))
 
+        ttk.Checkbutton(
+            upd,
+            text="更新后自动重启（无需手动关闭 · 推荐开启）",
+            variable=self._auto_restart_var,
+            command=self._on_auto_restart_toggle,
+        ).grid(row=7, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        ttk.Label(
+            upd,
+            text="开启后：安装完成会自动结束旧进程并启动新桌宠，不用找退出按钮。",
+            foreground="#1565C0",
+            font=("Microsoft YaHei UI", 8),
+            wraplength=460,
+        ).grid(row=8, column=0, columnspan=3, sticky="w", pady=(2, 6))
+
         btn_row = ttk.Frame(upd)
-        btn_row.grid(row=7, column=0, columnspan=3, sticky="w", pady=4)
+        btn_row.grid(row=9, column=0, columnspan=3, sticky="w", pady=4)
         ttk.Button(btn_row, text="检查更新", command=self._check_update, width=12).pack(
             side="left", padx=3
         )
@@ -186,13 +201,13 @@ class SettingsPanel:
         )
 
         ttk.Label(upd, textvariable=self._update_status, foreground="#333333", wraplength=460).grid(
-            row=8, column=0, columnspan=3, sticky="w", pady=(8, 0)
+            row=10, column=0, columnspan=3, sticky="w", pady=(8, 0)
         )
 
         tip = ttk.Label(
             frame,
             text="热键：Ctrl+Shift+D 生成道具 · Ctrl+Shift+P 面板 · Ctrl+Shift+C 角色\n"
-            "更新不会覆盖 data_store；更新成功后会自动重启桌宠。\n"
+            "更新不会覆盖 data_store；是否自动重启可在上方勾选。\n"
             "退出：本页或控制面板底部「退出桌宠」。",
             foreground="#666666",
             justify="left",
@@ -256,6 +271,7 @@ class SettingsPanel:
         if s.autostart != enabled:
             s.autostart = enabled
         self._refresh_autostart_hint()
+        self._auto_restart_var.set(s.auto_restart_after_update)
 
     def _selected_proxy(self) -> str:
         v = self._proxy_var.get().strip()
@@ -309,6 +325,7 @@ class SettingsPanel:
         s.github_branch = self._branch_var.get().strip() or "main"
         s.gh_proxy = self._selected_proxy() or "direct"
         s.custom_gh_proxies = self._read_custom_proxies()
+        s.auto_restart_after_update = bool(self._auto_restart_var.get())
         # 开机自启：保存时再同步一次（勾选时已即时生效）
         want = bool(self._autostart_var.get())
         ok, msg = autostart.set_enabled(want)
@@ -343,6 +360,9 @@ class SettingsPanel:
             self.app.settings.autostart = False
             messagebox.showwarning("开机自启", msg, parent=self.win)
         self._refresh_autostart_hint()
+
+    def _on_auto_restart_toggle(self) -> None:
+        self.app.settings.auto_restart_after_update = bool(self._auto_restart_var.get())
 
     def _quit_app(self) -> None:
         self.app.quit_app(confirm=True)
@@ -401,11 +421,25 @@ class SettingsPanel:
     def _do_update(self) -> None:
         if self._busy:
             return
+        # 以当前勾选为准（即时写入设置）
+        do_restart = bool(self._auto_restart_var.get())
+        self.app.settings.auto_restart_after_update = do_restart
+        if do_restart:
+            restart_hint = (
+                "已勾选「更新后自动重启」：\n"
+                "安装完成后会自动结束旧进程并启动新桌宠，\n"
+                "无需你手动关闭。"
+            )
+        else:
+            restart_hint = (
+                "未勾选自动重启：安装完成后需手动点「退出桌宠」再打开。\n"
+                "（若找不到退出，请勾选上方自动重启后再更新。）"
+            )
         if not messagebox.askyesno(
             "立即更新",
             "将从 GitHub 下载最新代码并覆盖程序文件。\n"
             "data_store（设置/日志/备忘录历史）不会被覆盖。\n\n"
-            "更新成功后将自动重启桌宠。是否继续？",
+            f"{restart_hint}\n\n是否继续？",
             parent=self.win,
         ):
             return
@@ -415,32 +449,62 @@ class SettingsPanel:
 
         def work() -> None:
             try:
+                # auto_restart 在 download_and_apply 内就会安排脚本重启
                 used = download_and_apply(
                     repo=self.app.settings.github_repo,
                     branch=self.app.settings.github_branch,
                     proxies=self._proxy_chain(),
                     progress=lambda m: self._set_status(m),
+                    auto_restart=do_restart,
                 )
                 ver = read_local_version()
-                self._set_status(
-                    f"更新完成 · VERSION={ver}\n来源: {used}\n即将自动重启…"
-                )
+                if do_restart:
+                    self._set_status(
+                        f"更新完成 · VERSION={ver}\n来源: {used}\n"
+                        "已安排自动重启（约 2 秒），无需手动关闭。"
+                    )
+                else:
+                    self._set_status(
+                        f"更新完成 · VERSION={ver}\n来源: {used}\n"
+                        "未勾选自动重启：请点「退出桌宠」后重新运行。"
+                    )
 
-                def _popup_and_restart() -> None:
+                def _popup_done() -> None:
+                    parent = self.win if self.win and self.win.winfo_exists() else None
                     try:
-                        messagebox.showinfo(
-                            "更新完成",
-                            f"已更新到 VERSION {ver}\n\n桌宠即将自动重启以加载新版本。",
-                            parent=self.win if self.win and self.win.winfo_exists() else None,
-                        )
+                        if do_restart:
+                            # 不阻塞太久：脚本已在跑，点确定后尝试优雅退出
+                            messagebox.showinfo(
+                                "更新完成 · 即将自动重启",
+                                f"已更新到 VERSION {ver}\n\n"
+                                "无需手动关闭桌宠。\n"
+                                "约 2 秒后会自动结束本进程并启动新版本。\n"
+                                "请点「确定」。",
+                                parent=parent,
+                            )
+                            # 再兜底一次（download_and_apply 里已安排过）
+                            try:
+                                self.app.quit_app(confirm=False)
+                            except Exception:
+                                pass
+                        else:
+                            messagebox.showinfo(
+                                "更新完成",
+                                f"已更新到 VERSION {ver}\n\n"
+                                "当前未开启自动重启。\n"
+                                "请打开控制面板 →「退出桌宠」，再重新运行程序。",
+                                parent=parent,
+                            )
                     except Exception:
-                        pass
-                    # 自动重启：新进程延迟启动，当前实例退出
-                    self.app.restart_app(delay_sec=1.5)
+                        if do_restart:
+                            try:
+                                self.app.quit_app(confirm=False)
+                            except Exception:
+                                pass
 
                 root = self.app.root
                 if root:
-                    root.after(0, _popup_and_restart)
+                    root.after(0, _popup_done)
             except Exception as exc:  # noqa: BLE001
                 self._set_status(f"更新失败: {exc}")
 
@@ -464,6 +528,7 @@ class SettingsPanel:
             s.github_branch = self._branch_var.get().strip()
         s.gh_proxy = self._selected_proxy() or "direct"
         s.custom_gh_proxies = self._read_custom_proxies()
+        s.auto_restart_after_update = bool(self._auto_restart_var.get())
 
     def _open_repo_page(self) -> None:
         import webbrowser

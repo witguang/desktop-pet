@@ -14,6 +14,9 @@ Thumbs.db
 # 用户数据与本地历史（更新器也不会覆盖 data_store）
 data_store/
 !data_store/.gitkeep
+# 更新自动重启临时脚本
+data_store/_auto_restart.cmd
+data_store/_auto_restart.sh
 
 # 本地参考素材 / 生成缓存
 ref/

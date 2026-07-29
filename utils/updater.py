@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -19,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from config import BASE_DIR, RESOURCE_DIR
+from config import BASE_DIR, DATA_DIR, RESOURCE_DIR
 
 # 内置代理前缀（末尾建议带 /）
 BUILTIN_GH_PROXIES: list[str] = [
@@ -265,36 +266,74 @@ def resolve_relaunch_command() -> tuple[list[str], Path]:
         return [str(exe)], exe.parent
 
     main_py = Path(__file__).resolve().parent.parent / "main.py"
+    if not main_py.is_file():
+        main_py = BASE_DIR / "main.py"
     python = Path(sys.executable).resolve()
     return [str(python), str(main_py)], main_py.parent
 
 
-def schedule_relaunch(*, delay_sec: float = 1.5) -> tuple[bool, str]:
+def read_auto_restart_preference() -> bool:
+    """从 data_store/settings.json 读取是否自动重启；缺省 True。"""
+    try:
+        path = DATA_DIR / "settings.json"
+        if not path.is_file():
+            return True
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return True
+        if "auto_restart_after_update" not in data:
+            return True
+        return bool(data.get("auto_restart_after_update"))
+    except Exception:
+        return True
+
+
+def schedule_relaunch(
+    *,
+    delay_sec: float = 2.0,
+    kill_pid: int | None = None,
+) -> tuple[bool, str]:
     """
-    在独立进程中延迟启动桌宠，便于当前进程退出后释放文件锁。
-    返回 (成功, 说明)。
+    写独立脚本：延迟 → 启动新桌宠 → 强制结束旧进程。
+    不依赖当前 Tk 能否正常 quit，解决「无退出按钮 / 关不掉」问题。
     """
     cmd, cwd = resolve_relaunch_command()
     cwd = Path(cwd)
     if not cwd.is_dir():
         return False, f"工作目录不存在: {cwd}"
 
-    delay = max(0.5, float(delay_sec))
+    delay = max(1.0, float(delay_sec))
+    pid = int(kill_pid if kill_pid is not None else os.getpid())
+
     try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
         if sys.platform.startswith("win"):
-            # 用 cmd 延迟再 start，子进程与当前 Python 脱钩
-            # start "" 可处理带空格路径
-            quoted = " ".join(f'"{c}"' if " " in c else c for c in cmd)
-            # ping 约 1 秒一轮，n = delay+1
+            helper = DATA_DIR / "_auto_restart.cmd"
+            # ping -n N ≈ N-1 秒
             n = max(2, int(delay) + 1)
-            line = f'ping -n {n} 127.0.0.1 >nul & cd /d "{cwd}" & start "" {quoted}'
+            # 每段参数单独加引号，避免路径空格
+            start_parts = " ".join(f'"{part}"' for part in cmd)
+            lines = [
+                "@echo off",
+                f"ping -n {n} 127.0.0.1 >nul",
+                f'cd /d "{cwd}"',
+                f'start "" {start_parts}',
+                "ping -n 2 127.0.0.1 >nul",
+                f"taskkill /PID {pid} /F >nul 2>&1",
+                'del "%~f0" >nul 2>&1',
+            ]
+            helper.write_text("\r\n".join(lines) + "\r\n", encoding="gbk", errors="replace")
+
             creationflags = 0
             if hasattr(subprocess, "DETACHED_PROCESS"):
                 creationflags |= subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
             if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
                 creationflags |= subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+            if hasattr(subprocess, "CREATE_NO_WINDOW"):
+                creationflags |= subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
+
             subprocess.Popen(
-                ["cmd", "/c", line],
+                ["cmd.exe", "/c", str(helper)],
                 cwd=str(cwd),
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
@@ -303,20 +342,28 @@ def schedule_relaunch(*, delay_sec: float = 1.5) -> tuple[bool, str]:
                 creationflags=creationflags,
             )
         else:
-            # 非 Windows：后台 shell  sleep && exec
-            shell_cmd = (
-                f"sleep {delay} && cd {shlex_quote(str(cwd))} && "
+            helper = DATA_DIR / "_auto_restart.sh"
+            script = (
+                "#!/bin/sh\n"
+                f"sleep {delay}\n"
+                f"cd {shlex_quote(str(cwd))}\n"
                 + " ".join(shlex_quote(c) for c in cmd)
+                + " &\n"
+                f"sleep 0.5\n"
+                f"kill -9 {pid} 2>/dev/null || true\n"
+                f"rm -f {shlex_quote(str(helper))}\n"
             )
+            helper.write_text(script, encoding="utf-8")
+            helper.chmod(0o755)
             subprocess.Popen(
-                ["/bin/sh", "-c", shell_cmd],
+                ["/bin/sh", str(helper)],
                 cwd=str(cwd),
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
-        return True, f"将在约 {delay:.0f}s 后启动: {' '.join(cmd)}"
+        return True, f"已安排约 {delay:.0f}s 后重启并结束旧进程 PID={pid}"
     except Exception as exc:  # noqa: BLE001
         return False, f"安排重启失败: {exc}"
 
@@ -337,8 +384,17 @@ def download_and_apply(
     proxies: list[str] | None = None,
     target: Path | None = None,
     progress: ProgressCb | None = None,
+    auto_restart: bool | None = None,
 ) -> str:
-    """下载 zip 并覆盖安装。返回使用的下载 URL。"""
+    """
+    下载 zip 并覆盖安装。返回使用的下载 URL。
+
+    auto_restart:
+      - None: 读设置 auto_restart_after_update（默认 True）
+      - True/False: 强制指定
+    为 True 时，安装完成后立刻安排「启动新进程 + 结束当前进程」，
+    调用方不必再让用户手动关桌宠。
+    """
     owner, name = parse_repo(repo)
     zip_url = f"https://github.com/{owner}/{name}/archive/refs/heads/{branch}.zip"
     proxy_list = proxies if proxies is not None else [""] + BUILTIN_GH_PROXIES
@@ -346,7 +402,27 @@ def download_and_apply(
     log("正在下载更新包…")
     data, used = _try_get(candidate_urls(zip_url, proxy_list), timeout=60.0)
     log(f"下载完成（{len(data) // 1024} KB），正在安装…")
-    apply_zip_update(data, target or BASE_DIR, progress=log)
+    dest = target or BASE_DIR
+    apply_zip_update(data, dest, progress=log)
+
+    # 打包版：代码在 RESOURCE_DIR（_internal），尽量同步一份
+    try:
+        if (
+            getattr(sys, "frozen", False)
+            and RESOURCE_DIR.resolve() != Path(dest).resolve()
+            and RESOURCE_DIR.is_dir()
+        ):
+            log("同步更新到运行时资源目录…")
+            apply_zip_update(data, RESOURCE_DIR, progress=log)
+    except Exception as exc:  # noqa: BLE001
+        log(f"资源目录同步跳过: {exc}")
+
+    do_restart = read_auto_restart_preference() if auto_restart is None else bool(auto_restart)
+    if do_restart:
+        ok, msg = schedule_relaunch(delay_sec=2.0, kill_pid=os.getpid())
+        log(msg if ok else f"自动重启未成功: {msg}")
+    else:
+        log("已关闭「更新后自动重启」，请手动退出后重新打开桌宠。")
     return used
 
 

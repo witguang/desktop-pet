@@ -1,9 +1,9 @@
 
 # 可换角色桌面宠物（Desktop Pet）
 
-类似 **Codex** 的 Windows 桌面互动宠物：无边框透明置顶、番茄钟、时光机历史、饥饿喂食、喝水提醒。
+Windows 桌面互动宠物：无边框透明置顶、番茄钟、时光机历史、喂食/快递投递、喝水与用餐提醒、备忘录等。
 
-**核心设计：引擎与角色完全分离。** 哆啦A梦只是内置角色包之一；换成猫、机器人、自绘 OC 只需丢一个文件夹，**不用改 Python 代码**。
+**核心设计：引擎与角色完全分离。** 内置 **琪琪（Kiki）** 与 **哆啦A梦** 两套角色包；换成猫、机器人、自绘 OC 只需丢一个文件夹，**不用改 Python 代码**。
 
 技术栈：Python 3.10+ / Tkinter / Pillow（可选 `keyboard` 全局热键）
 
@@ -17,14 +17,15 @@ pip install -r requirements.txt
 python main.py
 ```
 
-指定角色启动 / 列出角色：
+默认角色为 **琪琪（kiki）**。指定角色启动 / 列出角色：
 
 ```bash
-python main.py --character codex_spark
+python main.py --character kiki
+python main.py --character doraemon
 python main.py --list-characters
 ```
 
-重新生成内置角色占位图：
+重新生成内置角色占位图（开发用）：
 
 ```bash
 python -m utils.pack_generator
@@ -39,12 +40,12 @@ doraemon_pet/
 ├── main.py / app.py          # 入口与编排（角色无关）
 ├── config.py                 # 引擎级配置（番茄钟、饥饿、热键…）
 ├── characters/               # ★ 角色包目录（热插拔）
+│   ├── kiki/                 # 内置：琪琪（默认）
 │   ├── doraemon/             # 内置：哆啦A梦
-│   ├── codex_spark/          # 内置：Codex 风格编程猫
 │   └── _template/            # 自定义模板（复制即用）
 ├── core/
 │   ├── character_pack.py     # 角色包加载 / 发现 / 台词
-│   ├── pomodoro.py / hunger.py / water_reminder.py / pet_state.py
+│   ├── pomodoro.py / hunger.py / mood.py / water_reminder.py / pet_state.py
 ├── data/                     # JSON 任务日志 + 用户设置（当前角色）
 ├── ui/                       # 宠物窗、面板、食物、角色切换器
 └── utils/asset_loader.py     # 按当前角色包加载 PNG/GIF
@@ -61,7 +62,7 @@ doraemon_pet/
 
 ---
 
-## 像 Codex 一样替换角色
+## 替换 / 新增角色
 
 ### 方式 A：一键切换（已安装的包）
 
@@ -138,12 +139,12 @@ characters/<id>/
 
 ## 内置角色
 
-| id | 名称 | 食物 | 风格 |
-|----|------|------|------|
-| `doraemon` | 哆啦A梦 | 铜锣烧 🍩 | 经典蓝胖子 |
-| `codex_spark` | Spark | 小鱼干 🐟 | Codex 风编程猫 |
+| id | 名称 | 互动道具 | 计量 | 风格 |
+|----|------|----------|------|------|
+| `kiki` | 琪琪 | 快递包裹 📦 | 愉悦值（mood） | 魔女宅急便风，**默认角色** |
+| `doraemon` | 哆啦A梦 | 铜锣烧 🍩 | 饥饿值（hunger） | 经典蓝胖子 |
 
-占位图由 `utils/pack_generator.py` 程序绘制，正式使用请换成你的像素原稿。
+在控制面板点「切换角色」，或使用 `Ctrl+Shift+C` / `python main.py --character <id>`。
 
 ---
 
@@ -153,10 +154,11 @@ characters/<id>/
 |------|------|
 | 移动 | 左键拖动 |
 | 控制面板 | 右键 / `Ctrl+Shift+P` |
-| 生成食物 | 双击 / 面板 / `Ctrl+Shift+D` |
-| 喂食 | 把食物拖到角色身上 |
+| 生成道具 | 双击 / 面板 / `Ctrl+Shift+D` |
+| 投递 / 喂食 | 把道具拖到角色身上 |
 | 切换角色 | 面板 / `Ctrl+Shift+C` |
 | 时光机 | 面板按钮 |
+| 退出 | 控制面板 / 主设置 →「退出桌宠」 |
 
 ---
 
@@ -170,13 +172,16 @@ characters/<id>/
 
 播放 `timemachine` 动画，按日期回顾任务与番茄钟（`data_store/task_logs.json`）。
 
-### 饥饿与喂食
+### 饥饿 / 愉悦与投递
 
-默认每 30 秒饥饿 +1，达到 60 气泡提示；拖食物喂食后播 `eat` 并重置。
+- **哆啦A梦**：饥饿值；拖铜锣烧喂食后重置。
+- **琪琪**：愉悦值；拖快递包裹投递后恢复心情。
+
+间隔与阈值见 `config.py`，也可在「吃喝设置」里改喝水/用餐时刻表。
 
 ### 喝水提醒
 
-每日 6 次（`config.py` → `WATER_REMINDERS` 可改）：08:00 / 10:00 / 12:30 / 15:00 / 18:00 / 20:30。
+每日多时段（`config.py` → `WATER_REMINDERS`，主设置/吃喝设置可改）。
 
 ---
 
@@ -185,7 +190,8 @@ characters/<id>/
 | 文件 | 内容 |
 |------|------|
 | `data_store/task_logs.json` | 任务与番茄钟会话 |
-| `data_store/settings.json` | 当前角色 id 等 |
+| `data_store/settings.json` | 当前角色 id、备忘录路径、更新源等（不进 Git） |
+| `data_store/memos/` 或自定义目录 | 每日备忘录 `YYYY-MM-DD.md` |
 
 ---
 
@@ -199,4 +205,4 @@ characters/<id>/
 
 ## 版权
 
-本项目为学习 / 演示用引擎框架。内置「哆啦A梦」仅为占位示意；请使用**自绘或已授权**素材，勿将未授权官方美术用于商用。
+本项目为学习 / 演示用引擎框架。内置「琪琪」「哆啦A梦」等形象仅为示意/同人向占位；请使用**自绘或已授权**素材，勿将未授权官方美术用于商用。
