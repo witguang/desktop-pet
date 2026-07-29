@@ -631,6 +631,24 @@ class DesktopPetApp:
         except Exception:
             pass
 
+    def restart_app(self, *, delay_sec: float = 1.5) -> None:
+        """
+        安排新进程启动后退出当前实例（更新后自动重启用）。
+        不弹确认框。
+        """
+        from utils.updater import schedule_relaunch
+
+        ok, msg = schedule_relaunch(delay_sec=delay_sec)
+        if not ok:
+            messagebox.showwarning(
+                "自动重启",
+                f"更新已安装，但自动重启失败：\n{msg}\n\n请手动重新运行桌宠。",
+                parent=self.root,
+            )
+            return
+        # 稍后再退出，让提示框先显示完
+        self.root.after(400, lambda: self.quit_app(confirm=False))
+
     def run(self) -> None:
         self.root.mainloop()
         self._cleanup()

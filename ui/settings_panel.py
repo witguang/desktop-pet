@@ -192,7 +192,7 @@ class SettingsPanel:
         tip = ttk.Label(
             frame,
             text="热键：Ctrl+Shift+D 生成道具 · Ctrl+Shift+P 面板 · Ctrl+Shift+C 角色\n"
-            "更新不会覆盖 data_store（设置、任务日志、备忘录历史）。\n"
+            "更新不会覆盖 data_store；更新成功后会自动重启桌宠。\n"
             "退出：本页或控制面板底部「退出桌宠」。",
             foreground="#666666",
             justify="left",
@@ -405,7 +405,7 @@ class SettingsPanel:
             "立即更新",
             "将从 GitHub 下载最新代码并覆盖程序文件。\n"
             "data_store（设置/日志/备忘录历史）不会被覆盖。\n\n"
-            "更新后请重启桌宠。是否继续？",
+            "更新成功后将自动重启桌宠。是否继续？",
             parent=self.win,
         ):
             return
@@ -422,17 +422,25 @@ class SettingsPanel:
                     progress=lambda m: self._set_status(m),
                 )
                 ver = read_local_version()
-                self._set_status(f"更新完成 · 当前 VERSION={ver}\n来源: {used}\n请关闭后重新运行 main.py")
+                self._set_status(
+                    f"更新完成 · VERSION={ver}\n来源: {used}\n即将自动重启…"
+                )
 
-                def _popup() -> None:
-                    messagebox.showinfo(
-                        "更新完成",
-                        f"已更新到 VERSION {ver}\n\n请关闭桌宠后重新启动。",
-                        parent=self.win,
-                    )
+                def _popup_and_restart() -> None:
+                    try:
+                        messagebox.showinfo(
+                            "更新完成",
+                            f"已更新到 VERSION {ver}\n\n桌宠即将自动重启以加载新版本。",
+                            parent=self.win if self.win and self.win.winfo_exists() else None,
+                        )
+                    except Exception:
+                        pass
+                    # 自动重启：新进程延迟启动，当前实例退出
+                    self.app.restart_app(delay_sec=1.5)
 
-                if self.win:
-                    self.win.after(0, _popup)
+                root = self.app.root
+                if root:
+                    root.after(0, _popup_and_restart)
             except Exception as exc:  # noqa: BLE001
                 self._set_status(f"更新失败: {exc}")
 
@@ -441,6 +449,8 @@ class SettingsPanel:
 
                 if self.win:
                     self.win.after(0, _err)
+                else:
+                    self.app.root.after(0, _err)
             finally:
                 self._busy = False
 

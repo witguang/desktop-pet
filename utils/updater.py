@@ -9,6 +9,8 @@ import io
 import json
 import re
 import shutil
+import subprocess
+import sys
 import tempfile
 import urllib.error
 import urllib.request
@@ -251,6 +253,82 @@ def apply_zip_update(
                 log(f"已写入 {count} 个文件…")
     log(f"更新完成，共写入 {count} 个文件")
     return count
+
+
+def resolve_relaunch_command() -> tuple[list[str], Path]:
+    """
+    返回 (命令行, 工作目录)，用于重新启动当前桌宠。
+    打包 exe：直接启动自身；开发模式：python main.py。
+    """
+    if getattr(sys, "frozen", False):
+        exe = Path(sys.executable).resolve()
+        return [str(exe)], exe.parent
+
+    main_py = Path(__file__).resolve().parent.parent / "main.py"
+    python = Path(sys.executable).resolve()
+    return [str(python), str(main_py)], main_py.parent
+
+
+def schedule_relaunch(*, delay_sec: float = 1.5) -> tuple[bool, str]:
+    """
+    在独立进程中延迟启动桌宠，便于当前进程退出后释放文件锁。
+    返回 (成功, 说明)。
+    """
+    cmd, cwd = resolve_relaunch_command()
+    cwd = Path(cwd)
+    if not cwd.is_dir():
+        return False, f"工作目录不存在: {cwd}"
+
+    delay = max(0.5, float(delay_sec))
+    try:
+        if sys.platform.startswith("win"):
+            # 用 cmd 延迟再 start，子进程与当前 Python 脱钩
+            # start "" 可处理带空格路径
+            quoted = " ".join(f'"{c}"' if " " in c else c for c in cmd)
+            # ping 约 1 秒一轮，n = delay+1
+            n = max(2, int(delay) + 1)
+            line = f'ping -n {n} 127.0.0.1 >nul & cd /d "{cwd}" & start "" {quoted}'
+            creationflags = 0
+            if hasattr(subprocess, "DETACHED_PROCESS"):
+                creationflags |= subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
+            if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
+                creationflags |= subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+            subprocess.Popen(
+                ["cmd", "/c", line],
+                cwd=str(cwd),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+                creationflags=creationflags,
+            )
+        else:
+            # 非 Windows：后台 shell  sleep && exec
+            shell_cmd = (
+                f"sleep {delay} && cd {shlex_quote(str(cwd))} && "
+                + " ".join(shlex_quote(c) for c in cmd)
+            )
+            subprocess.Popen(
+                ["/bin/sh", "-c", shell_cmd],
+                cwd=str(cwd),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        return True, f"将在约 {delay:.0f}s 后启动: {' '.join(cmd)}"
+    except Exception as exc:  # noqa: BLE001
+        return False, f"安排重启失败: {exc}"
+
+
+def shlex_quote(s: str) -> str:
+    """Minimal shell quote without importing shlex on odd platforms first."""
+    try:
+        import shlex
+
+        return shlex.quote(s)
+    except Exception:
+        return "'" + s.replace("'", "'\"'\"'") + "'"
 
 
 def download_and_apply(
