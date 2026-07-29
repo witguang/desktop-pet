@@ -101,9 +101,22 @@ def write_initial_settings(
         except (json.JSONDecodeError, OSError):
             data = {}
     data["character_id"] = data.get("character_id") or character_id
-    data["memo_dir"] = str(memo_dir)
+    # 路径尽量可移植：主目录下写成 ~/...，默认 memos 写成相对名
+    try:
+        from data.settings import portable_path_str
+
+        data["memo_dir"] = portable_path_str(Path(memo_dir))
+    except Exception:
+        # 开发/安装早期：尽量用 ~/ 相对用户主目录
+        memo = Path(memo_dir).expanduser()
+        try:
+            rel = memo.resolve().relative_to(Path.home().resolve())
+            data["memo_dir"] = str(Path("~") / rel).replace("\\", "/")
+        except (ValueError, OSError):
+            data["memo_dir"] = str(memo)
     data["setup_completed"] = True
-    data["install_dir"] = str(install_dir)
+    # install_dir 仅本机记录，不进 Git；用绝对路径便于快捷方式
+    data["install_dir"] = str(Path(install_dir).expanduser().resolve())
     settings_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     memo_dir.mkdir(parents=True, exist_ok=True)
     return settings_path

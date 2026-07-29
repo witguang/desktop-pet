@@ -1,16 +1,30 @@
 # -*- mode: python ; coding: utf-8 -*-
+# Portable PyInstaller spec (no machine-specific absolute paths).
+# Prefer:  python build_app.py
+# Or:      pyinstaller --noconfirm DesktopPet.spec
+
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('characters', 'characters'), ('assets', 'assets'), ('VERSION', '.')]
-binaries = []
-hiddenimports = ['PIL._tkinter_finder']
-tmp_ret = collect_all('PIL')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+block_cipher = None
+root = Path(SPECPATH)
 
+datas = [
+    (str(root / "characters"), "characters"),
+    (str(root / "assets"), "assets"),
+    (str(root / "VERSION"), "."),
+]
+binaries = []
+hiddenimports = ["PIL._tkinter_finder"]
+tmp_ret = collect_all("PIL")
+datas += tmp_ret[0]
+binaries += tmp_ret[1]
+hiddenimports += tmp_ret[2]
 
 a = Analysis(
-    ['D:\\Appstore\\cat\\doraemon_pet\\main.py'],
-    pathex=['D:\\Appstore\\cat\\doraemon_pet'],
+    [str(root / "main.py")],
+    pathex=[str(root)],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
@@ -28,7 +42,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='DesktopPet',
+    name="DesktopPet",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -47,5 +61,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='DesktopPet',
+    name="DesktopPet",
 )

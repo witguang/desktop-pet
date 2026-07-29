@@ -21,9 +21,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
-REF = ROOT.parent / "ref" / "kiki"
-OUT = ROOT / "characters" / "kiki" / "assets"
-META = ROOT / "characters" / "kiki" / "character.json"
 
 
 
@@ -139,14 +136,31 @@ def draw_package(size: int = 48) -> Image.Image:
     return food
 
 
+def resolve_ref_dir() -> Path:
+    """Prefer project-local ref/kiki; fall back to sibling ../ref/kiki (monorepo layout)."""
+    candidates = [
+        ROOT / "ref" / "kiki",
+        ROOT.parent / "ref" / "kiki",
+    ]
+    for c in candidates:
+        if c.is_dir():
+            return c
+    return candidates[0]
+
+
+REF = resolve_ref_dir()
+OUT = ROOT / "characters" / "kiki" / "assets"
+META = ROOT / "characters" / "kiki" / "character.json"
+
 
 def main() -> None:
     if not REF.exists():
-        raise SystemExit(f"找不到参考目录: {REF}")
-
+        raise SystemExit(
+            f"找不到参考目录: {REF}\n"
+            "请把参考图放到 项目/ref/kiki/ 或 与项目同级的 ref/kiki/"
+        )
 
     OUT.mkdir(parents=True, exist_ok=True)
-
 
     kiki_main = load_clean(REF / "Kiki.jpg", thr=240)
     drink_src = load_clean(REF / "kiki _3.jpg", thr=235)
@@ -155,25 +169,20 @@ def main() -> None:
     sitting = load_clean(REF / "4123.jpg", thr=248)
     running = load_clean(REF / "3232.jpg", thr=248)
 
-
     delivery_panels = crop_vpanels(Image.open(REF / "kiki's delivery service.jpg"), n=4, thr=240)
     grid_panels = crop_vpanels(Image.open(REF / "958844576932089491.jpg"), n=4, thr=240)
-
 
     print("delivery panels", len(delivery_panels), [p.size for p in delivery_panels])
     print("grid panels", len(grid_panels), [p.size for p in grid_panels])
 
-
-    # 状态映射（按你提供的素材语义）
     idle = fit_square(kiki_main, 128)
     if len(grid_panels) >= 3:
-        focus = fit_square(grid_panels[2], 128)  # 读信 / 看地图
+        focus = fit_square(grid_panels[2], 128)
     else:
         focus = fit_square(load_clean(REF / "839639924325270244.jpg", thr=248), 128)
     drink = fit_square(drink_src, 128)
-    hungry = fit_square(sitting, 128)  # 等单
+    hungry = fit_square(sitting, 128)
     preview = fit_square(with_jiji, 128)
-
 
     idle.save(OUT / "idle.png")
     focus.save(OUT / "focus.png")
@@ -182,8 +191,6 @@ def main() -> None:
     preview.save(OUT / "preview.png")
     print("saved static pngs")
 
-
-    # eat.gif = 送快递
     eat_frames: list[Image.Image] = []
     for p in delivery_panels:
         eat_frames.append(fit_square(p, 128))
@@ -200,8 +207,6 @@ def main() -> None:
     save_gif(eat_frames, OUT / "eat.gif", duration=160)
     print("eat.gif frames", len(eat_frames))
 
-
-    # timemachine.gif = 飞行日记
     tm_frames: list[Image.Image] = []
     if len(grid_panels) >= 2:
         tm_frames.append(fit_square(grid_panels[1], 128))
@@ -214,18 +219,18 @@ def main() -> None:
         for j, (sx, sy) in enumerate([(10, 20), (110, 30), (20, 100), (100, 90), (64, 8)]):
             if (i + j) % 2 == 0:
                 r = 2
-                d.ellipse([sx - r + dx, sy - r + dy, sx + r + dx, sy + r + dy], fill=(255, 230, 100, 220))
+                d.ellipse(
+                    [sx - r + dx, sy - r + dy, sx + r + dx, sy + r + dy],
+                    fill=(255, 230, 100, 220),
+                )
         tm_frames.append(fr)
     if len(grid_panels) >= 4:
         tm_frames.append(fit_square(grid_panels[3], 128))
     save_gif(tm_frames, OUT / "timemachine.gif", duration=120)
     print("timemachine.gif frames", len(tm_frames))
 
-
     draw_package(48).save(OUT / "food.png")
 
-
-    # 确保 character.json 是送快递设定
     if META.exists():
         meta = json.loads(META.read_text(encoding="utf-8"))
     else:
@@ -237,7 +242,7 @@ def main() -> None:
             "name_en": "Kiki",
             "version": "1.2.0",
             "author": "builtin",
-            "description": "魔女宅急便风桌宠（基于你提供的参考图）。双击生成快递包裹，拖到身边完成投递。",
+            "description": "魔女宅急便风桌宠。双击生成快递包裹，拖到身边完成投递。",
             "preview": "preview.png",
             "display": {
                 "pet_size": [128, 128],
@@ -280,109 +285,26 @@ def main() -> None:
     )
     meta.setdefault(
         "ui",
-
-===== gen kiki headings =====
-
-
-LineNumber Line                                                                                                       
----------- ----                                                                                                       
-         2 生成琪琪（魔女宅急便风）与皮卡丘角色包素材。                                                                                     
-         5     python -m utils.gen_kiki_pikachu                                                                       
-        23 def _new(size: int = 128) -> Image.Image:                                                                  
-        27 def _save_png(img: Image.Image, path: Path) -> None:                                                       
-        32 def _save_gif(frames: list[Image.Image], path: Path, duration: int = 140) -> None:                         
-        58 # 琪琪（魔女宅急便风，原创 chibi）                                                                                      
-        60 def draw_witch(state: str, size: int = 128, frame: int = 0) -> Image.Image:                                
-        65     if state == "eat":                                                                                     
-        83     if state != "eat":                                                                                     
-       119     if state == "drink":                                                                                   
-       129     elif state == "eat":                                                                                   
-       141     elif state == "focus":                                                                                 
-       185     if state == "hungry":                                                                                  
-       190     elif state == "eat":                                                                                   
-       204     if state != "hungry":                                                                                  
-       222 def draw_herring_bread(size: int = 48) -> Image.Image:                                                     
-       242 def draw_pika(state: str, size: int = 128, frame: int = 0) -> Image.Image:                                 
-       247     if state == "eat":                                                                                     
-       261     spark = state in ("timemachine",) or (state == "focus")                                                
-       295     if state == "drink":                                                                                   
-       305     elif state == "eat":                                                                                   
-       311     elif state == "focus":                                                                                 
-       350     if state == "hungry":                                                                                  
-       355     elif state == "eat":                                                                                   
-       376     if state in ("timemachine", "focus"):                                                                  
-       388 def draw_berry(size: int = 48) -> Image.Image:                                                             
-       398 def _write_json(path: Path, data: dict) -> None:                                                           
-       404 def _write_pack(pack_id: str, meta: dict, draw_fn, food_fn) -> Path:                                       
-       410         ("idle", "idle.png"),                                                                              
-       411         ("focus", "focus.png"),                                                                            
-       412         ("hungry", "hungry.png"),                                                                          
-       413         ("drink", "drink.png"),                                                                            
-       417     _save_png(draw_fn("idle", 128, 0), assets / "preview.png")                                             
-       419     _save_gif([draw_fn("eat", 128, i) for i in range(5)], assets / "eat.gif", duration=130)                
-       420     _save_gif([draw_fn("timemachine", 128, i) for i in range(8)], assets / "timemachine.gif", duration=110)
-       426 KIKI_META = {                                                                                              
-       427     "id": "kiki",                                                                                          
-       428     "name": "琪琪",                                                                                          
-       429     "name_en": "Kiki",                                                                                     
-       441         "idle": {"file": "idle.png", "label": "待机"},                                                       
-       442         "focus": {"file": "focus.png", "label": "专注"},                                                     
-       443         "eat": {"file": "eat.gif", "label": "吃东西"},                                                        
-       444         "timemachine": {"file": "timemachine.gif", "label": "飞行日记"},                                       
-       445         "drink": {"file": "drink.png", "label": "喝水"},                                                     
-       446         "hungry": {"file": "hungry.png", "label": "饥饿"},                                                   
-       448     "animation": {"eat_ms": 2400, "timemachine_ms": 3000, "frame_ms": 120},                                
-       451             "嗨！我是琪琪~\n今天也要加油送快递！",                                                                         
-       454         "hungry": [                                                                                        
-       458         "spawn_food": ["把青鱼面包拖给我~", "好香！是给琪琪的吗？"],                                                         
-       459         "eat": ["嗯嗯，好好吃！", "补充魔力完毕 ✨"],                                                                    
-       461         "focus_start": ["开始专注：{task}\n静静飞行中… 📖"],                                                         
-       465         "focus_done": ["专注完成！🎉\n来块青鱼面包庆祝？"],                                                              
-       467         "task_done": ["任务送达！✓ 琪琪点赞"],                                                                      
-       469         "character_switched": ["琪琪报到！魔女快递为你服务~"],                                                          
-       496         "idle": {"file": "idle.png", "label": "待机"},                                                       
-       497         "focus": {"file": "focus.png", "label": "专注"},                                                     
-       498         "eat": {"file": "eat.gif", "label": "吃东西"},                                                        
-       499         "timemachine": {"file": "timemachine.gif", "label": "电击回忆"},                                       
-       500         "drink": {"file": "drink.png", "label": "喝水"},                                                     
-       501         "hungry": {"file": "hungry.png", "label": "饥饿"},                                                   
-       503     "animation": {"eat_ms": 2200, "timemachine_ms": 2800, "frame_ms": 100},                                
-       509         "hungry": [                                                                                        
-       514         "eat": ["好好吃！皮卡~", "电力回满 ⚡"],                                                                      
-       516         "focus_start": ["开始专注：{task}\n脸颊蓄电中… ⚡"],                                                          
-       520         "focus_done": ["专注完成！🎉\n来颗树果庆祝？"],                                                                
-       536 def generate_kiki() -> Path:                                                                               
-       537     return _write_pack("kiki", KIKI_META, draw_witch, draw_herring_bread)                                  
-       540 def generate_pikachu() -> Path:                                                                            
-       544 def generate_all() -> None:                                                                                
-       546     print("生成 琪琪 / 皮卡丘 角色包…")                                                                              
-       547     generate_kiki()                                                                                        
+        {
+            "panel_title": "{name} · 魔女快递面板",
+            "spawn_food_button": "生成{food} {food_emoji}",
+            "timemachine_button": "飞行日记 · 历史回顾 ⏳",
+            "timemachine_title": "飞行日记 · 历史回顾",
+            "character_button": "切换角色 🎭",
+            "status_line": "角色：{name}  ·  快递：{food} {food_emoji}",
+            "meter_label": "愉悦值: {value} / {max}",
+            "tip_line": (
+                "拖动桌宠移动 · 右键打开本面板 · 双击生成{food}\n"
+                "快捷键：生成包裹 Ctrl+Shift+D · 面板 Ctrl+Shift+P · 角色 Ctrl+Shift+C"
+            ),
+            "memo_button": "备忘录 📝",
+            "settings_button": "主设置 ⚙",
+        },
+    )
+    META.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print("updated", META)
+    print("done ->", OUT)
 
 
-
-
-===== root assets/ref =====
-
-
-FullName                                                                            Length
---------                                                                            ------
-D:\Appstore\cat\assets\characters\kiki\ai_gen\drink.png                              39528
-D:\Appstore\cat\assets\characters\kiki\ai_gen\focus.png                              45776
-D:\Appstore\cat\assets\characters\kiki\ai_gen\happy.png                              44235
-D:\Appstore\cat\assets\characters\kiki\ai_gen\idle.png                               34183
-D:\Appstore\cat\assets\characters\kiki\ai_gen\ref_url.txt                               36
-D:\Appstore\cat\assets\characters\kiki\ai_gen\sleep.png                              38043
-D:\Appstore\cat\assets\characters\kiki\ai_gen\summary.json                             642
-D:\Appstore\cat\assets\characters\kiki\ai_gen\wait_order.png                         27872
-D:\Appstore\cat\assets\characters\kiki\ai_gen\_probe.png                             34183
-D:\Appstore\cat\assets\characters\kiki\ai_gen\processed_128\drink.png                12582
-D:\Appstore\cat\assets\characters\kiki\ai_gen\processed_128\focus.png                14107
-D:\Appstore\cat\assets\characters\kiki\ai_gen\processed_128\happy.png                13940
-D:\Appstore\cat\assets\characters\kiki\ai_gen\processed_128\idle.png                  9172
-D:\Appstore\cat\assets\characters\kiki\ai_gen\processed_128\idle_sticker.png         13189
-D:\Appstore\cat\assets\characters\kiki\ai_gen\processed_128\sleep.png                12953
-D:\Appstore\cat\assets\characters\kiki\ai_gen\processed_128\wait_order.png            9504
-D:\Appstore\cat\ref\kiki_gen_test.png                                                34174
-D:\Appstore\cat\ref\README.md                                                         1199
-D:\Appstore\cat\ref\kiki\IMGBIN_com - Download Transparent PNG Images, For Free.jpg  83417
-D:\Appstore\cat\ref\kiki\kiki _3.jpg                                                 25448
+if __name__ == "__main__":
+    main()
