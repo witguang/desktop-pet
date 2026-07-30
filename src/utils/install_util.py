@@ -21,6 +21,7 @@ _SKIP_NAMES = {
 
 
 def default_install_dir() -> Path:
+    """默认安装目录（本机常见位置；D 盘仅作界面提醒，不预填）。"""
     if sys.platform.startswith("win"):
         base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
         return Path(base) / "DesktopPet"
@@ -28,8 +29,8 @@ def default_install_dir() -> Path:
 
 
 def default_memo_suggestion() -> Path:
-    docs = Path.home() / "Documents" / "DesktopPetMemos"
-    return docs
+    """默认备忘录建议路径（文档下；D 盘仅作界面提醒，不预填 D:\\…）。"""
+    return Path.home() / "Documents" / "DesktopPetMemos"
 
 
 def should_skip(name: str) -> bool:
@@ -45,9 +46,10 @@ def should_skip(name: str) -> bool:
 
 def copy_app_tree(src: Path, dst: Path, progress=None) -> int:
     """
-    复制应用目录到安装位置。
-    保留目标已有 data_store（若存在），避免覆盖用户数据。
-    返回复制的文件数。
+    复制应用到安装位置。
+
+    用户只要一个文件：优先只拷 DesktopPet.exe（图标/资源已打进 onefile）。
+    旧 onedir 才带 _internal；开发布局才整树复制。
     """
     src = src.resolve()
     dst = dst.resolve()
@@ -55,14 +57,41 @@ def copy_app_tree(src: Path, dst: Path, progress=None) -> int:
         return 0
 
     dst.mkdir(parents=True, exist_ok=True)
+    main_exe = src / "DesktopPet.exe"
+
+    # ---- 优先：只安装 DesktopPet.exe ----
+    if main_exe.is_file():
+        internal = src / "_internal"
+        if internal.is_dir():
+            # 旧 onedir：exe + _internal
+            shutil.copy2(main_exe, dst / "DesktopPet.exe")
+            if progress:
+                progress("已复制 DesktopPet.exe…")
+            dst_int = dst / "_internal"
+            if dst_int.exists():
+                shutil.rmtree(dst_int, ignore_errors=True)
+            shutil.copytree(
+                internal,
+                dst_int,
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            )
+            n = 1 + sum(1 for _ in dst_int.rglob("*") if _.is_file())
+            if progress:
+                progress(f"已复制程序（{n} 项）…")
+            return n
+
+        # onefile：安装目录里只放这一个 exe
+        shutil.copy2(main_exe, dst / "DesktopPet.exe")
+        if progress:
+            progress("已复制 DesktopPet.exe")
+        return 1
+
+    # ---- 回退：开发源码整树 ----
     count = 0
     for root, dirs, files in os.walk(src):
         rel_root = Path(root).relative_to(src)
-        # filter dirs in-place
         dirs[:] = [d for d in dirs if not should_skip(d)]
-        # skip overwriting existing data_store contents partially — skip walking into src data_store if dst has one
         if rel_root.parts[:1] == ("data_store",) and (dst / "data_store").exists():
-            # still allow merging new empty structure? skip entire data_store from src
             dirs[:] = []
             continue
 
@@ -71,7 +100,6 @@ def copy_app_tree(src: Path, dst: Path, progress=None) -> int:
         for f in files:
             if should_skip(f):
                 continue
-            # don't overwrite settings in data_store if we skipped walk — already skipped
             sfile = Path(root) / f
             dfile = target_dir / f
             if dfile.exists() and rel_root.parts[:1] == ("data_store",):
@@ -123,7 +151,7 @@ def write_initial_settings(
 
 
 def find_app_icon(base: Path | None = None) -> Path | None:
-    """查找 Kiki / 应用图标（优先 .ico）。"""
+    """查找应用图标（优先 app.ico；打包 onefile 时也查 _MEIPASS）。"""
     roots: list[Path] = []
     if base is not None:
         roots.append(Path(base))
@@ -131,11 +159,19 @@ def find_app_icon(base: Path | None = None) -> Path | None:
         roots.append(find_app_source())
     except Exception:
         pass
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            roots.append(Path(meipass))
+        roots.append(Path(sys.executable).resolve().parent)
     # 去重并保持顺序
     seen: set[str] = set()
     candidates: list[Path] = []
     for root in roots:
-        root = root.resolve()
+        try:
+            root = root.resolve()
+        except OSError:
+            continue
         key = str(root).lower()
         if key in seen:
             continue
@@ -170,8 +206,12 @@ def create_windows_shortcut(
     workdir = (workdir or target_exe.parent).resolve()
     shortcut_path = shortcut_path.resolve()
     shortcut_path.parent.mkdir(parents=True, exist_ok=True)
+    # 优先独立 app.ico；否则用 exe 内嵌图标（onefile 已嵌入 app.ico）
     icon = icon_path or find_app_icon(workdir) or find_app_icon(target_exe.parent)
-    icon_loc = f"{icon},0" if icon and icon.is_file() else f"{target_exe},0"
+    if icon and icon.is_file() and icon.suffix.lower() == ".ico":
+        icon_loc = f"{icon},0"
+    else:
+        icon_loc = f"{target_exe},0"
     try:
         # Prefer win32com if available
         try:

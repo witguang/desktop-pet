@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
-# 可移植 spec：路径全部相对 SPECPATH（本文件所在 packaging/），禁止硬编码绝对路径。
-# 用法（在项目根）:
+# 可移植 onefile spec：安装目录 ideally 只有 DesktopPet.exe
+# 路径相对 SPECPATH（packaging/），禁止硬编码绝对路径。
+# 用法（项目根）:
 #   pyinstaller --noconfirm --clean packaging/DesktopPet.spec
 from pathlib import Path
 
@@ -15,6 +16,9 @@ datas = [
     (str(root / "characters"), "characters"),
     (str(root / "VERSION"), "."),
 ]
+if icon.is_file():
+    datas.append((str(icon), "."))
+
 binaries = []
 hiddenimports = ["PIL._tkinter_finder"]
 tmp_ret = collect_all("PIL")
@@ -37,31 +41,26 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+# onefile：全部打进单个 DesktopPet.exe（无 _internal、无旁路 .py）
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
     [],
-    exclude_binaries=True,
     name="DesktopPet",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,  # UPX 可能导致图标/杀软异常
+    upx_exclude=[],
+    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(icon) if icon.is_file() else None,
-)
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name="DesktopPet",
+    icon=str(icon) if icon.is_file() else "NONE",
 )

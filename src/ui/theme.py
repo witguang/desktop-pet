@@ -4,8 +4,14 @@
 """
 from __future__ import annotations
 
+import sys
 import tkinter as tk
+from pathlib import Path
 from tkinter import ttk
+
+# 防止 PhotoImage 被 GC 后窗口图标变回默认羽毛
+_ICON_PHOTO_REFS: list[tk.PhotoImage] = []
+_ICON_PATH_CACHE: Path | None | bool = False  # False=未解析
 
 
 class Colors:
@@ -176,12 +182,80 @@ def configure_ttk_styles(master: tk.Misc | None = None) -> None:
     )
 
 
+def resolve_app_icon_path() -> Path | None:
+    """定位 app.ico：打包 onefile 在 _MEIPASS；开发在 packaging/。"""
+    global _ICON_PATH_CACHE
+    if _ICON_PATH_CACHE is not False:
+        return _ICON_PATH_CACHE if isinstance(_ICON_PATH_CACHE, Path) else None
+
+    candidates: list[Path] = []
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidates.append(Path(meipass) / "app.ico")
+        candidates.append(Path(sys.executable).resolve().parent / "app.ico")
+    # 开发：src/ui/theme.py → 项目根/packaging/app.ico
+    here = Path(__file__).resolve()
+    if here.parent.name == "ui":
+        root = here.parent.parent.parent  # src/ui → 项目根
+        candidates.append(root / "packaging" / "app.ico")
+        candidates.append(root / "app.ico")
+    # 平铺布局
+    candidates.append(here.parent.parent / "packaging" / "app.ico")
+    candidates.append(here.parent.parent / "app.ico")
+
+    for p in candidates:
+        try:
+            if p.is_file():
+                _ICON_PATH_CACHE = p
+                return p
+        except OSError:
+            continue
+    _ICON_PATH_CACHE = None
+    return None
+
+
+def apply_app_icon(window: tk.Misc) -> None:
+    """
+    把窗口左上角 / 任务栏图标从 Python 羽毛换成 app.ico（Kiki）。
+
+    iconphoto(True, …) 会作为后续 Toplevel 的默认图标。
+    """
+    path = resolve_app_icon_path()
+    if path is None:
+        return
+
+    # Windows：.ico 用 iconbitmap 最稳
+    try:
+        window.iconbitmap(default=str(path))
+    except tk.TclError:
+        try:
+            window.iconbitmap(str(path))
+        except tk.TclError:
+            pass
+
+    # 再设 iconphoto，覆盖部分环境下的羽毛默认图
+    try:
+        from PIL import Image, ImageTk
+
+        img = Image.open(path).convert("RGBA")
+        # 标题栏常用 16/32
+        photo = ImageTk.PhotoImage(img.resize((32, 32), Image.Resampling.LANCZOS))
+        window.iconphoto(True, photo)
+        _ICON_PHOTO_REFS.append(photo)
+        # 挂到窗口上防止被回收
+        setattr(window, "_desktop_pet_icon", photo)
+    except Exception:
+        pass
+
+
 def apply_window_bg(window: tk.Tk | tk.Toplevel) -> None:
-    """给窗口设置统一背景色。"""
+    """给窗口设置统一背景色，并应用 app.ico（去掉羽毛 logo）。"""
     try:
         window.configure(bg=Colors.BG_WINDOW)
     except tk.TclError:
         pass
+    apply_app_icon(window)
 
 
 def styled_label(

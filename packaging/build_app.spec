@@ -1,8 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
-# 兼容入口：与 DesktopPet.spec 相同（可移植，无硬编码绝对路径）。
-# 推荐直接使用:
-#   python packaging/build_app.py
-#   或 pyinstaller --noconfirm --clean packaging/DesktopPet.spec
+# 兼容入口：与 DesktopPet.spec 相同（onefile，可移植）
+# 推荐: python packaging/build_app.py
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all
@@ -16,6 +14,9 @@ datas = [
     (str(root / "characters"), "characters"),
     (str(root / "VERSION"), "."),
 ]
+if icon.is_file():
+    datas.append((str(icon), "."))
+
 binaries = []
 hiddenimports = ["PIL._tkinter_finder"]
 tmp_ret = collect_all("PIL")
@@ -41,28 +42,22 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
     [],
-    exclude_binaries=True,
     name="DesktopPet",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
+    upx_exclude=[],
+    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(icon) if icon.is_file() else None,
-)
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name="DesktopPet",
+    icon=str(icon) if icon.is_file() else "NONE",
 )

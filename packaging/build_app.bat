@@ -32,7 +32,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [3/4] Building (portable .spec, no absolute paths) ...
+echo [3/4] Building single DesktopPet.exe ...
 python packaging\build_app.py
 if errorlevel 1 (
   echo [ERROR] build failed
@@ -42,9 +42,9 @@ if errorlevel 1 (
 
 echo [4/4] Done
 echo.
-echo Output: dist\DesktopPet\DesktopPet.exe
-echo Zip:    dist\DesktopPet-v*-windows.zip
-echo Specs:  packaging\DesktopPet.spec + DesktopPetSetup.spec
+echo Only one file for friends:
+echo   dist\DesktopPet.exe
+echo   dist\DesktopPet-v*-windows.zip  ^(zip 内也只有这一个 exe^)
 echo.
 pause
 exit /b 0

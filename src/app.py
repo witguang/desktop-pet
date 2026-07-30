@@ -100,6 +100,13 @@ class DesktopPetApp:
             self.settings.character_id = self.character.id
 
         self.root = tk.Tk()
+        # 标题栏 / 任务栏：Kiki app.ico，不要 Python 羽毛
+        try:
+            from ui.theme import apply_app_icon
+
+            apply_app_icon(self.root)
+        except Exception:
+            pass
         self.loader = AssetLoader(self.character)
 
         self.current_task_id: str | None = None
@@ -802,6 +809,7 @@ def main() -> int:
     if "--install" in args:
         from ui.setup_wizard import SetupWizard
 
+        # 完成后是否打开桌宠由向导内勾选控制（默认打开）
         ok = SetupWizard(mode="install").run()
         return 0 if ok else 1
 
@@ -820,21 +828,28 @@ def main() -> int:
 
     if force_setup or needs_setup():
         # DesktopPet.exe / 开发模式：可选择安装位置（默认当前目录）+ 备忘录。
-        # 完整安装向导由 DesktopPetSetup.exe 或 --install 触发。
+        # 首次设置内置在 DesktopPet.exe；也可用 --install 走完整安装向导。
         wizard = SetupWizard(mode="first_run")
         ok = wizard.run()
         if not ok:
             if force_setup or needs_setup():
                 return 1
-        # 若用户把程序复制到了新位置，启动新实例后当前实例退出
-        if wizard.relaunch_exe:
+        # 用户取消勾选「完成后打开桌宠」：只完成设置，不进入主程序
+        if not wizard.should_launch_pet:
+            return 0
+        # 安装位置换了目录：从新位置启动，当前实例退出
+        if wizard.relaunch_exe is not None:
             try:
                 import subprocess
 
-                subprocess.Popen(
-                    [str(wizard.relaunch_exe)],
-                    cwd=str(wizard.relaunch_exe.parent),
-                )
+                exe = wizard.relaunch_exe
+                if exe.suffix.lower() == ".py":
+                    subprocess.Popen(
+                        [sys.executable, str(exe)],
+                        cwd=str(exe.parent),
+                    )
+                else:
+                    subprocess.Popen([str(exe)], cwd=str(exe.parent))
             except Exception as exc:
                 messagebox.showerror(
                     "启动失败",
