@@ -75,13 +75,20 @@ def load_or_create_memo_text(path: Path, day: date | None = None) -> str:
     return body
 
 
-def save_memo_text(path: Path, text: str, *, snapshot: bool = True) -> None:
+def save_memo_text(
+    path: Path,
+    text: str,
+    *,
+    snapshot: bool = True,
+    force_snapshot: bool = False,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not text.endswith("\n"):
         text = text + "\n"
     path.write_text(text, encoding="utf-8")
     if snapshot:
-        record_version(path, text)
+        # 自动保存用节流；手动保存 / 关闭面板 force 记历史
+        record_version(path, text, force=force_snapshot)
 
 
 def open_path_externally(path: Path) -> None:
@@ -449,10 +456,11 @@ class MemoPanel:
                 except tk.TclError:
                     pass
         try:
-            save_memo_text(path, body, snapshot=True)
+            # 手动点保存：force 记历史；quiet 自动保存走节流
+            save_memo_text(path, body, snapshot=True, force_snapshot=not quiet)
             self._dirty = False
             self._path_var.set(str(path))
-            self._status_var.set(f"已保存 · {path.name}（已记历史）")
+            self._status_var.set(f"已保存 · {path.name}" + ("（已记历史）" if not quiet else ""))
             if not quiet:
                 messagebox.showinfo("备忘录", f"已保存：\n{path}", parent=self.win)
             if self._history_win and self._history_win.winfo_exists():
@@ -737,7 +745,7 @@ class MemoPanel:
         if self._dirty:
             try:
                 body = renumber_list_items(self._get_body())
-                save_memo_text(self._note_path(), body, snapshot=True)
+                save_memo_text(self._note_path(), body, snapshot=True, force_snapshot=True)
             except OSError:
                 pass
             self._dirty = False

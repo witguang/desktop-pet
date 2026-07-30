@@ -6,7 +6,9 @@ Windows 桌面互动宠物：无边框透明置顶、番茄钟、时光机历史
 
 技术栈：Python 3.10+ / Tkinter / Pillow（可选 `keyboard` 全局热键）
 
-当前版本见根目录 [`VERSION`](./VERSION)。
+当前版本见根目录 [`VERSION`](./VERSION)（开发可用 `python main.py --version`）。
+
+后续优化路线（建议 + 已落地项）见仓库外文档：`../.grok/optimization-roadmap-2026-07-31.md`（若从 monorepo 布局打开）。
 
 ---
 

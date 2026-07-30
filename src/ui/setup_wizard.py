@@ -292,6 +292,13 @@ class SetupWizard:
 
             install_path = Path(install_raw).expanduser()
             memo_path = Path(memo_raw).expanduser()
+
+            # C 盘软提示（不拦截，仅确认）
+            if not self._confirm_if_system_drive(root, install_path, "软件安装位置"):
+                return
+            if not self._confirm_if_system_drive(root, memo_path, "备忘录保存位置"):
+                return
+
             try:
                 memo_path.mkdir(parents=True, exist_ok=True)
             except OSError as exc:
@@ -410,9 +417,31 @@ class SetupWizard:
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
         root.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
         root.minsize(480, 320)
+        root.bind("<Escape>", lambda _e: do_cancel())
+        root.bind("<Return>", lambda _e: do_finish())
         root.mainloop()
         self._root = None
         return self.result_ok
+
+    @staticmethod
+    def _confirm_if_system_drive(parent: tk.Tk, path: Path, label: str) -> bool:
+        """若路径在 C: 上，提醒建议 D 盘；用户可仍选继续。"""
+        try:
+            drive = path.expanduser().resolve().drive.upper()
+        except OSError:
+            drive = str(path)[:2].upper()
+        if drive != "C:":
+            return True
+        return bool(
+            messagebox.askyesno(
+                "建议使用 D 盘",
+                f"{label} 当前在系统盘（C:）：\n{path}\n\n"
+                "建议改到 D 盘以减少占满系统盘的风险。\n\n"
+                "仍要使用 C 盘吗？",
+                parent=parent,
+                icon="warning",
+            )
+        )
 
     @staticmethod
     def _attach_path_placeholder(entry: tk.Entry, var: tk.StringVar, text: str) -> None:

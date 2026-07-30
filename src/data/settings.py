@@ -105,9 +105,29 @@ class Settings:
             return {"character_id": DEFAULT_CHARACTER_ID}
 
     def save(self) -> None:
+        """原子写入：先写临时文件再 replace，避免崩溃半截损坏 settings.json。"""
+        import os
+        import tempfile
+
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(self._data, f, ensure_ascii=False, indent=2)
+        payload = json.dumps(self._data, ensure_ascii=False, indent=2)
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=".settings_",
+            suffix=".tmp",
+            dir=str(self.path.parent),
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(payload)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_name, self.path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
 
     @property
     def character_id(self) -> str:

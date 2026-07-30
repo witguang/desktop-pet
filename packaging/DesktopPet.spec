@@ -5,8 +5,6 @@
 #   pyinstaller --noconfirm --clean packaging/DesktopPet.spec
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all
-
 pkg = Path(SPECPATH)
 root = pkg.parent
 src = root / "src"
@@ -20,11 +18,17 @@ if icon.is_file():
     datas.append((str(icon), "."))
 
 binaries = []
-hiddenimports = ["PIL._tkinter_finder"]
-tmp_ret = collect_all("PIL")
-datas += tmp_ret[0]
-binaries += tmp_ret[1]
-hiddenimports += tmp_ret[2]
+# 只拉必要 PIL 钩子，避免 collect_all 把整个 Pillow 生态 + numpy 撑爆体积
+hiddenimports = [
+    "PIL._tkinter_finder",
+    "PIL.Image",
+    "PIL.ImageTk",
+    "PIL.ImageSequence",
+    "PIL.PngImagePlugin",
+    "PIL.GifImagePlugin",
+    "PIL.IcoImagePlugin",
+    "PIL.JpegImagePlugin",
+]
 
 a = Analysis(
     [str(root / "main.py")],
@@ -35,9 +39,20 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        "numpy",
+        "pytest",
+        "unittest",
+        "tkinter.test",
+        "pydoc",
+        "doctest",
+        "IPython",
+        "matplotlib",
+        "scipy",
+        "pandas",
+    ],
     noarchive=False,
-    optimize=0,
+    optimize=1,
 )
 pyz = PYZ(a.pure)
 

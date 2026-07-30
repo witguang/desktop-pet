@@ -786,6 +786,20 @@ class DesktopPetApp:
 DoraemonPetApp = DesktopPetApp
 
 
+def _set_windows_app_id() -> None:
+    """稳定任务栏分组 / 钉住图标（避免显示成 python.exe）。"""
+    if not sys.platform.startswith("win"):
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(  # type: ignore[attr-defined]
+            "witguang.DesktopPet"
+        )
+    except Exception:
+        pass
+
+
 def main() -> int:
     """
     入口参数：
@@ -793,9 +807,18 @@ def main() -> int:
       --setup            强制再跑一次初始设置（仅备忘录，当前目录运行）
       --list-characters  列出角色
       --character <id>   指定角色启动
+      --version          打印版本并退出
     """
     character_id = None
     args = list(sys.argv[1:])
+
+    if "--version" in args or "-V" in args:
+        from utils.updater import read_local_version
+
+        print(read_local_version())
+        return 0
+
+    _set_windows_app_id()
 
     # 新进程启动时接管：清掉更新后残留的旧桌宠（用户无需手动结束旧进程）
     if "--install" not in args and "--list-characters" not in args:

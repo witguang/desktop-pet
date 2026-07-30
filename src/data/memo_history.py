@@ -18,7 +18,10 @@ from typing import Any
 from config import DATA_DIR
 
 HISTORY_ROOT = DATA_DIR / "memo_history"
-MAX_VERSIONS_PER_NOTE = 80
+# 自动保存很勤，历史快照不宜无限堆；显式 force=True 仍可记
+MAX_VERSIONS_PER_NOTE = 40
+# 两次自动快照最短间隔（秒）；避免连敲时每 700ms 写一整份 .md
+MIN_AUTO_SNAPSHOT_INTERVAL_SEC = 120.0
 
 _ITEM_LINE_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$")
 
@@ -155,6 +158,10 @@ def record_version(note_path: Path, new_text: str, *, force: bool = False) -> Hi
     """
     若内容相对最新快照有变化，则写入新版本。
     返回新建的版本；无变化返回 None。
+
+    force=False（自动保存）：相同 hash 跳过，且距上一版不足
+    MIN_AUTO_SNAPSHOT_INTERVAL_SEC 也跳过，减轻磁盘刷写。
+    force=True（手动保存/关闭/恢复前）：只要 hash 变就记。
     """
     if not new_text.endswith("\n"):
         new_text = new_text + "\n"
@@ -166,10 +173,20 @@ def record_version(note_path: Path, new_text: str, *, force: bool = False) -> Hi
     versions = data.get("versions") or []
 
     new_hash = content_hash(new_text)
-    if versions and not force:
+    if versions:
         last = versions[-1] if isinstance(versions[-1], dict) else {}
         if str(last.get("hash", "")) == new_hash:
             return None
+        if not force:
+            # 时间节流：自动快照不要太密
+            last_time = str(last.get("time") or "")
+            if last_time:
+                try:
+                    prev = datetime.strptime(last_time, "%Y-%m-%d %H:%M:%S")
+                    if (datetime.now() - prev).total_seconds() < MIN_AUTO_SNAPSHOT_INTERVAL_SEC:
+                        return None
+                except ValueError:
+                    pass
 
     # 上一版全文
     old_text = ""

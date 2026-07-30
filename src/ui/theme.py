@@ -65,7 +65,8 @@ class Fonts:
         return (cls.FAMILY, size, weight)
 
     @classmethod
-    def small(cls, size: int = 8, bold: bool = False) -> tuple[str, int, str]:
+    def small(cls, size: int = 9, bold: bool = False) -> tuple[str, int, str]:
+        # 默认 9：8 在浅底灰字上可读性偏弱
         weight = "bold" if bold else "normal"
         return (cls.FAMILY, size, weight)
 

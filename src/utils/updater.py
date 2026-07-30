@@ -242,9 +242,15 @@ def apply_zip_update(
                 rel = name
             if not rel or _should_skip(rel):
                 continue
-            dest = (target / rel).resolve()
-            # 路径穿越防护
-            if not str(dest).startswith(str(target)):
+            # 拒绝绝对路径与 .. 穿越
+            rel_path = Path(rel)
+            if rel_path.is_absolute() or ".." in rel_path.parts:
+                continue
+            dest = (target / rel_path).resolve()
+            # 路径穿越防护：禁止 prefix 误判（如 C:\App vs C:\AppEvil）
+            try:
+                dest.relative_to(target)
+            except ValueError:
                 continue
             dest.parent.mkdir(parents=True, exist_ok=True)
             with zf.open(info) as src, open(dest, "wb") as out:

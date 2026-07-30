@@ -71,8 +71,8 @@ class PetWindow:
                 pass
         self.root.configure(bg=color)
 
-    def _schedule_topmost(self, interval_ms: int = 5000) -> None:
-        """定期刷新置顶状态，防止被其他窗口覆盖后沉下去。"""
+    def _schedule_topmost(self, interval_ms: int = 30_000) -> None:
+        """定期刷新置顶；默认 30s（过勤会抢焦点、费电）。"""
         self.cancel_topmost_job()
         self._topmost_job = self.root.after(interval_ms, self._enforce_topmost)
 
