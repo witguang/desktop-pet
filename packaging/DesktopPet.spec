@@ -1,11 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
-# 可移植 spec：SPECPATH = packaging/，项目根为上一级
+# 可移植 spec：路径全部相对 SPECPATH（本文件所在 packaging/），禁止硬编码绝对路径。
+# 用法（在项目根）:
+#   pyinstaller --noconfirm --clean packaging/DesktopPet.spec
 from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_all
 
 pkg = Path(SPECPATH)
 root = pkg.parent
 src = root / "src"
+icon = pkg / "app.ico"
 
 datas = [
     (str(root / "characters"), "characters"),
@@ -49,10 +53,12 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=str(icon) if icon.is_file() else None,
 )
 coll = COLLECT(
     exe,
     a.binaries,
+    a.zipfiles,
     a.datas,
     strip=False,
     upx=True,

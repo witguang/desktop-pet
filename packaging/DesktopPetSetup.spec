@@ -1,8 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
-# 兼容入口：与 DesktopPet.spec 相同（可移植，无硬编码绝对路径）。
-# 推荐直接使用:
-#   python packaging/build_app.py
-#   或 pyinstaller --noconfirm --clean packaging/DesktopPet.spec
+# 可移植 spec：安装向导 DesktopPetSetup（路径相对 SPECPATH，无硬编码绝对路径）
+# 用法（在项目根）:
+#   pyinstaller --noconfirm --clean packaging/DesktopPetSetup.spec
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all
@@ -24,7 +23,7 @@ binaries += tmp_ret[1]
 hiddenimports += tmp_ret[2]
 
 a = Analysis(
-    [str(root / "main.py")],
+    [str(root / "install_app.py")],
     pathex=[str(src), str(root)],
     binaries=binaries,
     datas=datas,
@@ -43,7 +42,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="DesktopPet",
+    name="DesktopPetSetup",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -64,5 +63,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="DesktopPet",
+    name="DesktopPetSetup",
 )

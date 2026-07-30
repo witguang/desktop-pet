@@ -1,8 +1,12 @@
 """
 Cross-platform desktop pet packager.
+
 Run from project root:
   python packaging/build_app.py
   or: 打包给朋友.bat / packaging/build_app.bat
+
+使用 packaging/ 下可移植 .spec（相对 SPECPATH，无硬编码绝对路径）。
+不把 PyInstaller 自动生成的带本机绝对路径的 .spec 写入 packaging/。
 """
 from __future__ import annotations
 
@@ -15,20 +19,38 @@ PKG_DIR = Path(__file__).resolve().parent
 ROOT = PKG_DIR.parent
 SRC = ROOT / "src"
 
+# 可移植 spec（相对项目根的路径字符串，传给 PyInstaller）
+SPEC_MAIN = "packaging/DesktopPet.spec"
+SPEC_SETUP = "packaging/DesktopPetSetup.spec"
+
 
 def run(cmd: list[str]) -> None:
     print("+", " ".join(cmd), flush=True)
     subprocess.check_call(cmd, cwd=str(ROOT))
 
 
+def _rel_to_root(path: Path) -> str:
+    """命令行参数尽量用相对项目根的路径，避免写入绝对路径。"""
+    try:
+        return path.resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        # 不在项目树内时退回文件名（仅日志/极端情况）
+        return path.name
+
+
 def main() -> int:
     print(f"Python: {sys.executable}")
-    print(f"Root:   {ROOT}")
-    print(f"Src:    {SRC}")
+    print(f"Root:   {_rel_to_root(ROOT) or '.'}")
+    print(f"Src:    {_rel_to_root(SRC)}")
 
     if not SRC.is_dir():
-        print("ERROR: missing src/ directory:", SRC)
+        print("ERROR: missing src/ directory:", _rel_to_root(SRC))
         return 1
+
+    for rel in (SPEC_MAIN, SPEC_SETUP):
+        if not (ROOT / rel).is_file():
+            print("ERROR: missing portable spec:", rel)
+            return 1
 
     try:
         import PyInstaller  # noqa: F401
@@ -40,57 +62,26 @@ def main() -> int:
     for name in ("build", "dist"):
         p = ROOT / name
         if p.exists():
-            print(f"Removing {p} ...")
+            print(f"Removing {_rel_to_root(p)} ...")
             shutil.rmtree(p, ignore_errors=True)
 
     icon_path = _ensure_app_icon()
 
-    # Windows uses ";" in --add-data; other OS use ":"
-    sep = ";" if sys.platform.startswith("win") else ":"
-    add_data = [
-        f"characters{sep}characters",
-        f"VERSION{sep}.",
-    ]
-
+    # 用 portable .spec 构建；dist/work 相对路径；不生成/覆盖 packaging 下的 spec
     common = [
         sys.executable,
         "-m",
         "PyInstaller",
         "--noconfirm",
         "--clean",
-        "--windowed",
-        "--paths",
-        str(SRC),
-        "--paths",
-        str(ROOT),
-        "--hidden-import",
-        "PIL._tkinter_finder",
-        "--collect-all",
-        "PIL",
         "--distpath",
-        str(ROOT / "dist"),
+        "dist",
         "--workpath",
-        str(ROOT / "build"),
-        "--specpath",
-        str(PKG_DIR),
+        "build",
     ]
-    for item in add_data:
-        common.extend(["--add-data", item])
-    if icon_path is not None:
-        common.extend(["--icon", str(icon_path)])
 
-    # Main app
-    run(common + ["--name", "DesktopPet", str(ROOT / "main.py")])
-
-    # Installer
-    run(
-        common
-        + [
-            "--name",
-            "DesktopPetSetup",
-            str(ROOT / "install_app.py"),
-        ]
-    )
+    run(common + [SPEC_MAIN])
+    run(common + [SPEC_SETUP])
 
     main_dir = ROOT / "dist" / "DesktopPet"
     setup_dir = ROOT / "dist" / "DesktopPetSetup"
@@ -102,7 +93,7 @@ def main() -> int:
 
     exe = main_dir / "DesktopPet.exe"
     if not exe.exists():
-        print("ERROR: build finished but exe not found:", exe)
+        print("ERROR: build finished but exe not found:", _rel_to_root(exe))
         return 1
 
     # 业务源码平铺到 exe 旁（热更新 / external_source 约定）
@@ -113,19 +104,19 @@ def main() -> int:
 
     zip_path = _make_friend_zip(main_dir)
 
-    print("OK:", exe)
+    print("OK:", _rel_to_root(exe))
     setup = main_dir / "DesktopPetSetup.exe"
     if setup.exists():
-        print("OK:", setup)
+        print("OK:", _rel_to_root(setup))
     if zip_path is not None:
-        print("OK:", zip_path)
+        print("OK:", _rel_to_root(zip_path))
     print()
     print("=== 给朋友 ===")
     print("1) 把 zip 发过去，或上传到 GitHub Releases")
     print("2) 朋友解压后双击 DesktopPetSetup.exe（推荐）或 DesktopPet.exe")
     print("3) 无需安装 Python")
     print()
-    print("Share folder:", main_dir)
+    print("Share folder:", _rel_to_root(main_dir))
     return 0
 
 
@@ -157,7 +148,7 @@ def _ensure_app_icon() -> Path | None:
             sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
             out.parent.mkdir(parents=True, exist_ok=True)
             img.save(out, format="ICO", sizes=sizes)
-            print(f"Generated icon: {out}")
+            print(f"Generated icon: packaging/{out.name}")
         return out
     except Exception as exc:
         print(f"WARN: could not build app.ico: {exc}")
@@ -218,15 +209,26 @@ def _copy_sources_beside_exe(main_dir: Path) -> None:
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".memo_history"),
         )
 
-    # packaging 工具可选拷贝，方便有源码的用户二次打包
+    # packaging 工具可选拷贝，方便有源码的用户二次打包（仅 portable 文件）
     pack_dst = main_dir / "packaging"
     if pack_dst.exists():
         shutil.rmtree(pack_dst, ignore_errors=True)
     pack_dst.mkdir(parents=True, exist_ok=True)
-    for name in ("build_app.py", "build_app.bat", "DesktopPet.spec", "build_app.spec"):
+    for name in (
+        "build_app.py",
+        "build_app.bat",
+        "DesktopPet.spec",
+        "DesktopPetSetup.spec",
+        "build_app.spec",
+        "README.md",
+    ):
         src = PKG_DIR / name
         if src.is_file():
             shutil.copy2(src, pack_dst / name)
+    # 图标可选
+    ico = PKG_DIR / "app.ico"
+    if ico.is_file():
+        shutil.copy2(ico, pack_dst / "app.ico")
 
     readme_friend = main_dir / "【先读我】安装说明.txt"
     readme_friend.write_text(
@@ -270,14 +272,21 @@ def _make_friend_zip(main_dir: Path) -> Path | None:
     out = ROOT / "dist" / f"DesktopPet-v{version}-windows.zip"
     if out.exists():
         out.unlink()
+    # make_archive 的 base_name 用相对路径，避免日志/中间结果带盘符依赖
     base_name = str(ROOT / "dist" / f"DesktopPet-v{version}")
-    archive = shutil.make_archive(base_name, "zip", root_dir=main_dir.parent, base_dir=main_dir.name)
+    archive = shutil.make_archive(
+        base_name,
+        "zip",
+        root_dir=str(main_dir.parent),
+        base_dir=main_dir.name,
+    )
     generated = Path(archive)
     if generated.resolve() != out.resolve():
         if out.exists():
             out.unlink()
         generated.replace(out)
-    print(f"Friend zip: {out} ({out.stat().st_size // (1024 * 1024)} MB)")
+    size_mb = out.stat().st_size // (1024 * 1024)
+    print(f"Friend zip: {_rel_to_root(out)} ({size_mb} MB)")
     return out
 
 
