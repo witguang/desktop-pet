@@ -20,6 +20,7 @@ _TEMPORARY_STATES = (
     PetState.FLY,
     PetState.TIME_MACHINE,
     PetState.DRINK,
+    PetState.PREVIEW,
 )
 
 

@@ -9,6 +9,8 @@ import tkinter as tk
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from ui.theme import Colors, Fonts
+
 if TYPE_CHECKING:
     from core.reminder_session import ActiveReminder
     from ui.pet_window import PetWindow
@@ -39,7 +41,7 @@ class ReminderBar:
         win = tk.Toplevel(parent)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
-        win.configure(bg="#1A237E")
+        win.configure(bg=Colors.PRIMARY)
         # 不抢焦点，避免打断输入；但按钮仍可点
         try:
             win.attributes("-toolwindow", True)
@@ -50,42 +52,42 @@ class ReminderBar:
         self._msg_var.set(reminder.message)
         self._btn_var.set(reminder.complete_label)
 
-        outer = tk.Frame(win, bg="#1A237E", padx=2, pady=2)
+        outer = tk.Frame(win, bg=Colors.PRIMARY, padx=2, pady=2)
         outer.pack(fill="both", expand=True)
-        card = tk.Frame(outer, bg="#E8EAF6", padx=12, pady=10)
+        card = tk.Frame(outer, bg=Colors.BG_CARD, padx=14, pady=12)
         card.pack(fill="both", expand=True)
 
         tk.Label(
             card,
             textvariable=self._title_var,
-            bg="#E8EAF6",
-            fg="#283593",
-            font=("Microsoft YaHei UI", 10, "bold"),
+            bg=Colors.BG_CARD,
+            fg=Colors.PRIMARY,
+            font=Fonts.heading(bold=True),
             anchor="w",
         ).pack(fill="x")
 
         tk.Label(
             card,
             textvariable=self._msg_var,
-            bg="#E8EAF6",
-            fg="#212121",
-            font=("Microsoft YaHei UI", 9),
+            bg=Colors.BG_CARD,
+            fg=Colors.TEXT_MAIN,
+            font=Fonts.body(),
             justify="left",
-            wraplength=220,
+            wraplength=240,
             anchor="w",
-        ).pack(fill="x", pady=(4, 8))
+        ).pack(fill="x", pady=(6, 10))
 
         btn = tk.Button(
             card,
             textvariable=self._btn_var,
-            font=("Microsoft YaHei UI", 11, "bold"),
-            bg="#43A047",
-            fg="#FFFFFF",
-            activebackground="#2E7D32",
-            activeforeground="#FFFFFF",
+            font=Fonts.body(bold=True),
+            bg=Colors.SUCCESS,
+            fg=Colors.TEXT_ON_PRIMARY,
+            activebackground="#43A047",
+            activeforeground=Colors.TEXT_ON_PRIMARY,
             relief="flat",
             padx=16,
-            pady=6,
+            pady=7,
             cursor="hand2",
             command=self._click_complete,
         )

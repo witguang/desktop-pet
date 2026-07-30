@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import tkinter as tk
+from collections.abc import Callable
 from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING
 
 from config import DEFAULT_BREAK_MINUTES, DEFAULT_FOCUS_MINUTES
 from core.pomodoro import TimerMode, TimerStatus
+from ui.theme import Colors, Fonts, apply_window_bg, configure_ttk_styles
 
 if TYPE_CHECKING:
     from app import DesktopPetApp
@@ -44,32 +46,69 @@ class ControlPanel:
             self.refresh()
             return
 
+        configure_ttk_styles()
         char = self.app.character
         win = tk.Toplevel(self.app.root)
+        apply_window_bg(win)
         win.title(char.ui_text("panel_title"))
         win.attributes("-topmost", True)
         win.resizable(False, False)
         win.protocol("WM_DELETE_WINDOW", self.close)
         self.win = win
 
-        pad = {"padx": 10, "pady": 4}
-        root_frame = ttk.Frame(win, padding=12)
+        pad = {"padx": 8, "pady": 3}
+        root_frame = tk.Frame(win, bg=Colors.BG_WINDOW, padx=14, pady=14)
         root_frame.grid(row=0, column=0, sticky="nsew")
 
-        ttk.Label(root_frame, textvariable=self.character_var, foreground="#1565C0").grid(
-            row=0, column=0, columnspan=3, sticky="w", **pad
-        )
+        tk.Label(
+            root_frame,
+            textvariable=self.character_var,
+            fg=Colors.PRIMARY,
+            bg=Colors.BG_WINDOW,
+            font=Fonts.body(bold=True),
+        ).grid(row=0, column=0, columnspan=3, sticky="w", **pad)
 
-        ttk.Label(root_frame, text="当前任务").grid(row=1, column=0, sticky="w", **pad)
-        ttk.Entry(root_frame, textvariable=self.task_var, width=28).grid(
-            row=1, column=1, columnspan=2, sticky="ew", **pad
+        tk.Label(root_frame, text="当前任务", bg=Colors.BG_WINDOW, fg=Colors.TEXT_MAIN, font=Fonts.body()).grid(
+            row=1, column=0, sticky="w", **pad
         )
+        tk.Entry(
+            root_frame,
+            textvariable=self.task_var,
+            width=28,
+            bg=Colors.BG_INPUT,
+            fg=Colors.TEXT_MAIN,
+            relief="solid",
+            bd=1,
+            font=Fonts.body(),
+        ).grid(row=1, column=1, columnspan=2, sticky="ew", **pad)
 
-        ttk.Label(root_frame, text="专注 (分钟)").grid(row=2, column=0, sticky="w", **pad)
-        focus_entry = ttk.Entry(root_frame, textvariable=self.focus_var, width=8)
+        tk.Label(root_frame, text="专注 (分钟)", bg=Colors.BG_WINDOW, fg=Colors.TEXT_MAIN, font=Fonts.body()).grid(
+            row=2, column=0, sticky="w", **pad
+        )
+        focus_entry = tk.Entry(
+            root_frame,
+            textvariable=self.focus_var,
+            width=8,
+            bg=Colors.BG_INPUT,
+            fg=Colors.TEXT_MAIN,
+            relief="solid",
+            bd=1,
+            font=Fonts.body(),
+        )
         focus_entry.grid(row=2, column=1, sticky="w", **pad)
-        ttk.Label(root_frame, text="休息 (分钟)").grid(row=3, column=0, sticky="w", **pad)
-        break_entry = ttk.Entry(root_frame, textvariable=self.break_var, width=8)
+        tk.Label(root_frame, text="休息 (分钟)", bg=Colors.BG_WINDOW, fg=Colors.TEXT_MAIN, font=Fonts.body()).grid(
+            row=3, column=0, sticky="w", **pad
+        )
+        break_entry = tk.Entry(
+            root_frame,
+            textvariable=self.break_var,
+            width=8,
+            bg=Colors.BG_INPUT,
+            fg=Colors.TEXT_MAIN,
+            relief="solid",
+            bd=1,
+            font=Fonts.body(),
+        )
         break_entry.grid(row=3, column=1, sticky="w", **pad)
         # 修改分钟数时立即同步番茄钟大字显示（空闲时）
         self._focus_trace = self.focus_var.trace_add("write", self._on_minutes_edited)
@@ -79,72 +118,157 @@ class ControlPanel:
         focus_entry.bind("<FocusOut>", self._on_minutes_edited)
         break_entry.bind("<FocusOut>", self._on_minutes_edited)
 
-        timer_frame = ttk.LabelFrame(root_frame, text="番茄钟", padding=8)
+        timer_frame = tk.LabelFrame(
+            root_frame,
+            text=" 番茄钟 ",
+            bg=Colors.BG_CARD,
+            fg=Colors.PRIMARY,
+            font=Fonts.body(bold=True),
+            relief="solid",
+            bd=1,
+            padx=10,
+            pady=10,
+        )
         timer_frame.grid(row=4, column=0, columnspan=3, sticky="ew", pady=8)
-        ttk.Label(timer_frame, textvariable=self.timer_label_var, font=("Consolas", 28, "bold")).pack()
-        ttk.Label(timer_frame, textvariable=self.mode_var).pack()
-        ttk.Label(timer_frame, textvariable=self.status_var).pack()
+        tk.Label(
+            timer_frame,
+            textvariable=self.timer_label_var,
+            font=("Consolas", 30, "bold"),
+            bg=Colors.BG_CARD,
+            fg=Colors.TEXT_MAIN,
+        ).pack()
+        tk.Label(timer_frame, textvariable=self.mode_var, bg=Colors.BG_CARD, fg=Colors.TEXT_SECONDARY, font=Fonts.body()).pack()
+        tk.Label(timer_frame, textvariable=self.status_var, bg=Colors.BG_CARD, fg=Colors.TEXT_MUTED, font=Fonts.small()).pack()
 
-        btn_frame = ttk.Frame(root_frame)
-        btn_frame.grid(row=5, column=0, columnspan=3, pady=6)
-        ttk.Button(btn_frame, text="开始", command=self._on_start, width=8).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="暂停", command=self._on_pause, width=8).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="重置", command=self._on_reset, width=8).pack(side="left", padx=4)
+        btn_frame = tk.Frame(root_frame, bg=Colors.BG_WINDOW)
+        btn_frame.grid(row=5, column=0, columnspan=3, pady=8)
+        for text, cmd in (
+            ("开始", self._on_start),
+            ("暂停", self._on_pause),
+            ("重置", self._on_reset),
+        ):
+            tk.Button(
+                btn_frame,
+                text=text,
+                command=cmd,
+                width=8,
+                font=Fonts.body(),
+                bg=Colors.PRIMARY,
+                fg=Colors.TEXT_ON_PRIMARY,
+                activebackground=Colors.PRIMARY_DARK,
+                activeforeground=Colors.TEXT_ON_PRIMARY,
+                relief="flat",
+                padx=8,
+                pady=4,
+                cursor="hand2",
+            ).pack(side="left", padx=4)
 
-        extra = ttk.LabelFrame(root_frame, text="互动", padding=8)
+        def _secondary_btn(parent: tk.Widget, text: str, command: Callable[[], None] | None = None) -> tk.Button:
+            """生成带边框的次要按钮，与卡片背景有区分。"""
+            return tk.Button(
+                parent,
+                text=text,
+                command=command,
+                bg=Colors.BG_CARD,
+                fg=Colors.TEXT_MAIN,
+                activebackground=Colors.BG_HOVER,
+                activeforeground=Colors.TEXT_MAIN,
+                relief="solid",
+                bd=1,
+                highlightbackground=Colors.BORDER,
+                highlightthickness=1,
+                font=Fonts.body(),
+                anchor="w",
+                padx=10,
+                pady=5,
+                cursor="hand2",
+            )
+
+        extra = tk.LabelFrame(
+            root_frame,
+            text=" 互动 ",
+            bg=Colors.BG_CARD,
+            fg=Colors.PRIMARY,
+            font=Fonts.body(bold=True),
+            relief="solid",
+            bd=1,
+            padx=10,
+            pady=8,
+        )
         extra.grid(row=6, column=0, columnspan=3, sticky="ew", pady=6)
-        self._food_btn = ttk.Button(
+        self._food_btn = _secondary_btn(
             extra,
-            text=char.ui_text("spawn_food_button"),
-            command=self.app.spawn_food,
+            char.ui_text("spawn_food_button"),
+            self.app.spawn_food,
         )
         self._food_btn.pack(fill="x", pady=2)
-        ttk.Button(
-            extra,
-            text=char.ui_text("timemachine_button"),
-            command=self.app.open_time_machine,
-        ).pack(fill="x", pady=2)
-        ttk.Button(
-            extra,
-            text=char.ui_text("character_button"),
-            command=self.app.open_character_picker,
-        ).pack(fill="x", pady=2)
-        ttk.Button(extra, text="完成当前任务 ✓", command=self._on_complete_task).pack(fill="x", pady=2)
-        ttk.Button(extra, text="测试喝水提醒 💧", command=self.app.debug_water_remind).pack(fill="x", pady=2)
-        ttk.Button(extra, text="测试用餐提醒 🍽", command=self.app.debug_meal_remind).pack(fill="x", pady=2)
-        ttk.Button(extra, text="吃喝设置", command=self.open_eat_drink_settings).pack(fill="x", pady=2)
+        for text, cmd in (
+            (char.ui_text("timemachine_button"), self.app.open_time_machine),
+            (char.ui_text("character_button"), self.app.open_character_picker),
+            ("完成当前任务 ✓", self._on_complete_task),
+            ("吃喝设置", self.open_eat_drink_settings),
+        ):
+            _secondary_btn(extra, text, cmd).pack(fill="x", pady=2)
 
         # 底部：备忘录 + 主设置
-        bottom = ttk.LabelFrame(root_frame, text="工具", padding=8)
+        bottom = tk.LabelFrame(
+            root_frame,
+            text=" 工具 ",
+            bg=Colors.BG_CARD,
+            fg=Colors.PRIMARY,
+            font=Fonts.body(bold=True),
+            relief="solid",
+            bd=1,
+            padx=10,
+            pady=8,
+        )
         bottom.grid(row=7, column=0, columnspan=3, sticky="ew", pady=6)
-        self._memo_btn = ttk.Button(
+        self._memo_btn = _secondary_btn(
             bottom,
-            text=char.ui_text("memo_button"),
-            command=self.open_memo,
+            char.ui_text("memo_button"),
+            self.open_memo,
         )
         self._memo_btn.pack(fill="x", pady=2)
-        self._settings_btn = ttk.Button(
+        self._settings_btn = _secondary_btn(
             bottom,
-            text=char.ui_text("settings_button"),
-            command=self.open_main_settings,
+            char.ui_text("settings_button"),
+            self.open_main_settings,
         )
         self._settings_btn.pack(fill="x", pady=2)
 
         # 退出：无边框窗口没有系统关闭钮，必须提供明确入口
-        exit_frame = ttk.Frame(root_frame)
-        exit_frame.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(8, 2))
-        ttk.Button(
+        exit_frame = tk.Frame(root_frame, bg=Colors.BG_WINDOW)
+        exit_frame.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(10, 4))
+        tk.Button(
             exit_frame,
             text="退出桌宠",
             command=self.quit_app,
+            bg=Colors.DANGER,
+            fg=Colors.TEXT_ON_PRIMARY,
+            activebackground="#D32F2F",
+            activeforeground=Colors.TEXT_ON_PRIMARY,
+            relief="flat",
+            font=Fonts.body(),
+            padx=10,
+            pady=5,
+            cursor="hand2",
         ).pack(fill="x")
 
-        ttk.Label(root_frame, textvariable=self.meter_var).grid(
-            row=9, column=0, columnspan=3, sticky="w", **pad
-        )
-        ttk.Label(root_frame, textvariable=self.tip_var, foreground="#555555", justify="left").grid(
-            row=10, column=0, columnspan=3, sticky="w", **pad
-        )
+        tk.Label(
+            root_frame,
+            textvariable=self.meter_var,
+            bg=Colors.BG_WINDOW,
+            fg=Colors.TEXT_SECONDARY,
+            font=Fonts.body(),
+        ).grid(row=9, column=0, columnspan=3, sticky="w", **pad)
+        tk.Label(
+            root_frame,
+            textvariable=self.tip_var,
+            bg=Colors.BG_WINDOW,
+            fg=Colors.TEXT_MUTED,
+            font=Fonts.small(),
+            justify="left",
+        ).grid(row=10, column=0, columnspan=3, sticky="w", **pad)
 
         win.update_idletasks()
         ww = win.winfo_reqwidth()

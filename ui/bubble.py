@@ -5,6 +5,8 @@ from __future__ import annotations
 import tkinter as tk
 from typing import TYPE_CHECKING
 
+from ui.theme import Colors, Fonts
+
 if TYPE_CHECKING:
     from ui.pet_window import PetWindow
 
@@ -29,22 +31,35 @@ class SpeechBubble:
             pass
         win.configure(bg=self.pet.transparent_color)
 
-        frame = tk.Frame(win, bg="#FFF8DC", highlightbackground="#333333", highlightthickness=2)
-        frame.pack()
+        # 气泡主体：白底 + 主色细边框 + 圆角通过内边距模拟
+        frame = tk.Frame(
+            win,
+            bg=Colors.BG_CARD,
+            highlightbackground=Colors.PRIMARY,
+            highlightthickness=1,
+            bd=0,
+        )
+        frame.pack(padx=2, pady=2)
         label = tk.Label(
             frame,
             text=text,
-            bg="#FFF8DC",
-            fg="#222222",
-            font=("Microsoft YaHei UI", 10),
-            padx=10,
-            pady=6,
+            bg=Colors.BG_CARD,
+            fg=Colors.TEXT_MAIN,
+            font=Fonts.body(),
+            padx=14,
+            pady=10,
             justify="left",
-            wraplength=180,
+            wraplength=200,
         )
         label.pack()
-        # 小三角
-        tip = tk.Label(win, text="▼", bg=self.pet.transparent_color, fg="#FFF8DC", font=("Arial", 10))
+        # 小三角（与气泡同色的倒三角）
+        tip = tk.Label(
+            win,
+            text="▼",
+            bg=self.pet.transparent_color,
+            fg=Colors.BG_CARD,
+            font=("Arial", 10),
+        )
         tip.pack()
 
         self._win = win

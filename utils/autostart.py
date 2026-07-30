@@ -92,11 +92,19 @@ def _create_shortcut_with_args(
     target: Path,
     workdir: Path,
     args: list[str],
+    *,
+    icon_path: Path | None = None,
+    description: str = "Desktop Pet — Kiki",
 ) -> bool:
     """创建带命令行参数的 .lnk（PowerShell）。"""
+    from utils.install_util import find_app_icon
+
     shortcut_path = shortcut_path.resolve()
     shortcut_path.parent.mkdir(parents=True, exist_ok=True)
     arg_str = " ".join(f'"{a}"' if " " in a else a for a in args)
+    icon = icon_path or find_app_icon(workdir) or find_app_icon(target.parent)
+    icon_loc = f"{icon},0" if icon and icon.is_file() else f"{target},0"
+
     # 转义给 PowerShell 单引号字符串
     def _ps(s: str) -> str:
         return s.replace("'", "''")
@@ -107,6 +115,8 @@ def _create_shortcut_with_args(
         f"$s.TargetPath = '{_ps(str(target))}'; "
         f"$s.Arguments = '{_ps(arg_str)}'; "
         f"$s.WorkingDirectory = '{_ps(str(workdir))}'; "
+        f"$s.IconLocation = '{_ps(icon_loc)}'; "
+        f"$s.Description = '{_ps(description)}'; "
         f"$s.Save()"
     )
     try:

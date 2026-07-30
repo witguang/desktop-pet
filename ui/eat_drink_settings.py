@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from config import MEAL_PERIOD_OPTIONS, MEAL_REMINDERS, WATER_REMINDERS
+from ui.theme import Colors, Fonts, apply_window_bg, configure_ttk_styles
 
 if TYPE_CHECKING:
     from app import DesktopPetApp
@@ -38,68 +39,161 @@ class EatDrinkSettingsPanel:
             self.win.lift()
             return
 
+        configure_ttk_styles()
         win = tk.Toplevel(self.app.root)
+        apply_window_bg(win)
         win.title("吃喝设置")
         win.attributes("-topmost", True)
-        win.minsize(460, 480)
-        win.geometry("500x560")
+        win.minsize(480, 520)
+        win.geometry("500x600")
         win.protocol("WM_DELETE_WINDOW", self.close)
         self.win = win
 
         win.columnconfigure(0, weight=1)
         win.rowconfigure(0, weight=1)
 
-        canvas = tk.Canvas(win, highlightthickness=0)
+        canvas = tk.Canvas(win, highlightthickness=0, bg=Colors.BG_WINDOW)
         scroll = ttk.Scrollbar(win, orient="vertical", command=canvas.yview)
-        root = ttk.Frame(canvas, padding=12)
+        root = tk.Frame(canvas, bg=Colors.BG_WINDOW, padx=16, pady=16)
         root.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=root, anchor="nw")
+        self._frame_window = canvas.create_window(
+            (0, 0), window=root, anchor="nw", width=canvas.winfo_width()
+        )
         canvas.configure(yscrollcommand=scroll.set)
         canvas.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
 
-        ttk.Label(
-            root,
-            text="吃喝提醒设置",
-            font=("Microsoft YaHei UI", 12, "bold"),
-        ).pack(anchor="w", pady=(0, 6))
-        ttk.Label(
-            root,
-            text="时间格式：15:16（24 小时制，精确到分钟）· 可自由增减次数",
-            foreground="#666666",
-            font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", pady=(0, 10))
+        def _on_canvas_configure(event: tk.Event) -> None:
+            canvas.itemconfigure(self._frame_window, width=event.width)
+
+        canvas.bind("<Configure>", _on_canvas_configure)
+
+        def _on_mousewheel(event: tk.Event) -> None:
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        win.bind("<Destroy>", lambda _e: canvas.unbind_all("<MouseWheel>"), add="+")
 
         # 喝水
-        water_box = ttk.LabelFrame(root, text="喝水提醒", padding=8)
-        water_box.pack(fill="x", pady=6)
-        self._water_frame = ttk.Frame(water_box)
-        self._water_frame.pack(fill="x")
-        ttk.Button(water_box, text="＋ 添加喝水时刻", command=self._add_water_row).pack(
-            anchor="w", pady=(6, 0)
+        water_box = tk.LabelFrame(
+            root,
+            text=" 喝水提醒 ",
+            bg=Colors.BG_CARD,
+            fg=Colors.PRIMARY,
+            font=Fonts.body(bold=True),
+            relief="solid",
+            bd=1,
+            padx=10,
+            pady=10,
         )
+        water_box.pack(fill="x", pady=6)
+        self._water_frame = tk.Frame(water_box, bg=Colors.BG_CARD)
+        self._water_frame.pack(fill="x")
+        tk.Button(
+            water_box,
+            text="＋ 添加喝水时刻",
+            command=self._add_water_row,
+            bg=Colors.BG_CARD,
+            fg=Colors.PRIMARY,
+            activebackground=Colors.BG_HOVER,
+            activeforeground=Colors.PRIMARY,
+            relief="solid",
+            bd=1,
+            highlightbackground=Colors.BORDER,
+            highlightthickness=1,
+            font=Fonts.body(),
+            anchor="w",
+            padx=6,
+            pady=3,
+            cursor="hand2",
+        ).pack(anchor="w", pady=(6, 0))
 
         # 用餐
-        meal_box = ttk.LabelFrame(root, text="用餐提醒（早餐 / 午餐 / 晚餐 / 宵夜）", padding=8)
+        meal_box = tk.LabelFrame(
+            root,
+            text=" 用餐提醒（早餐 / 午餐 / 晚餐 / 宵夜） ",
+            bg=Colors.BG_CARD,
+            fg=Colors.PRIMARY,
+            font=Fonts.body(bold=True),
+            relief="solid",
+            bd=1,
+            padx=10,
+            pady=10,
+        )
         meal_box.pack(fill="x", pady=6)
-        self._meal_frame = ttk.Frame(meal_box)
+        self._meal_frame = tk.Frame(meal_box, bg=Colors.BG_CARD)
         self._meal_frame.pack(fill="x")
-        ttk.Button(meal_box, text="＋ 添加用餐时刻", command=self._add_meal_row).pack(
-            anchor="w", pady=(6, 0)
-        )
+        tk.Button(
+            meal_box,
+            text="＋ 添加用餐时刻",
+            command=self._add_meal_row,
+            bg=Colors.BG_CARD,
+            fg=Colors.PRIMARY,
+            activebackground=Colors.BG_HOVER,
+            activeforeground=Colors.PRIMARY,
+            relief="solid",
+            bd=1,
+            highlightbackground=Colors.BORDER,
+            highlightthickness=1,
+            font=Fonts.body(),
+            anchor="w",
+            padx=6,
+            pady=3,
+            cursor="hand2",
+        ).pack(anchor="w", pady=(6, 0))
 
-        bar = ttk.Frame(root)
-        bar.pack(fill="x", pady=(14, 0))
-        ttk.Button(bar, text="恢复默认", command=self._reset_defaults, width=10).pack(
-            side="left", padx=2
-        )
-        ttk.Button(bar, text="保存", command=self._save, width=10).pack(side="right", padx=2)
-        ttk.Button(bar, text="关闭", command=self.close, width=10).pack(side="right", padx=2)
+        bar = tk.Frame(root, bg=Colors.BG_WINDOW)
+        bar.pack(fill="x", pady=(16, 0))
+        tk.Button(
+            bar,
+            text="恢复默认",
+            command=self._reset_defaults,
+            width=10,
+            bg=Colors.BG_CARD,
+            fg=Colors.TEXT_MAIN,
+            activebackground=Colors.BG_HOVER,
+            activeforeground=Colors.TEXT_MAIN,
+            relief="solid",
+            bd=1,
+            highlightbackground=Colors.BORDER,
+            highlightthickness=1,
+            font=Fonts.body(),
+            cursor="hand2",
+        ).pack(side="left", padx=2)
+        tk.Button(
+            bar,
+            text="保存",
+            command=self._save,
+            width=10,
+            bg=Colors.SUCCESS,
+            fg=Colors.TEXT_ON_PRIMARY,
+            activebackground="#43A047",
+            activeforeground=Colors.TEXT_ON_PRIMARY,
+            relief="flat",
+            font=Fonts.body(bold=True),
+            cursor="hand2",
+        ).pack(side="right", padx=2)
+        tk.Button(
+            bar,
+            text="关闭",
+            command=self.close,
+            width=10,
+            bg=Colors.BG_CARD,
+            fg=Colors.TEXT_MAIN,
+            activebackground=Colors.BG_HOVER,
+            activeforeground=Colors.TEXT_MAIN,
+            relief="solid",
+            bd=1,
+            highlightbackground=Colors.BORDER,
+            highlightthickness=1,
+            font=Fonts.body(),
+            cursor="hand2",
+        ).pack(side="right", padx=2)
 
         self._load_from_settings()
         win.update_idletasks()
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-        win.geometry(f"500x560+{(sw - 500) // 2}+{(sh - 560) // 2}")
+        win.geometry(f"500x600+{(sw - 500) // 2}+{(sh - 600) // 2}")
 
     def _clear_frame(self, frame: ttk.Frame | None) -> None:
         if not frame:
@@ -132,9 +226,22 @@ class EatDrinkSettingsPanel:
         ttk.Entry(row, textvariable=tv, width=8).pack(side="left", padx=4)
         ttk.Label(row, text="标签", width=4).pack(side="left")
         ttk.Entry(row, textvariable=pv, width=12).pack(side="left", padx=4)
-        ttk.Button(row, text="删除", width=6, command=lambda r=row, tv=tv: self._remove_water(r, tv)).pack(
-            side="right"
-        )
+        tk.Button(
+            row,
+            text="删除",
+            width=6,
+            command=lambda r=row, tv=tv: self._remove_water(r, tv),
+            bg=Colors.BG_CARD,
+            fg=Colors.TEXT_MAIN,
+            activebackground=Colors.BG_HOVER,
+            activeforeground=Colors.TEXT_MAIN,
+            relief="solid",
+            bd=1,
+            highlightbackground=Colors.BORDER,
+            highlightthickness=1,
+            font=Fonts.small(),
+            cursor="hand2",
+        ).pack(side="right", padx=2)
         self._water_rows.append((tv, pv))
 
     def _remove_water(self, row: ttk.Frame, tv: tk.StringVar) -> None:
@@ -159,9 +266,22 @@ class EatDrinkSettingsPanel:
             state="readonly",
         )
         cb.pack(side="left", padx=4)
-        ttk.Button(row, text="删除", width=6, command=lambda r=row, tv=tv: self._remove_meal(r, tv)).pack(
-            side="right"
-        )
+        tk.Button(
+            row,
+            text="删除",
+            width=6,
+            command=lambda r=row, tv=tv: self._remove_meal(r, tv),
+            bg=Colors.BG_CARD,
+            fg=Colors.TEXT_MAIN,
+            activebackground=Colors.BG_HOVER,
+            activeforeground=Colors.TEXT_MAIN,
+            relief="solid",
+            bd=1,
+            highlightbackground=Colors.BORDER,
+            highlightthickness=1,
+            font=Fonts.small(),
+            cursor="hand2",
+        ).pack(side="right", padx=2)
         self._meal_rows.append((tv, pv))
 
     def _remove_meal(self, row: ttk.Frame, tv: tk.StringVar) -> None:

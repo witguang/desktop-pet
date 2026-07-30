@@ -43,9 +43,6 @@ SETTINGS_FILE = DATA_DIR / "settings.json"
 # 默认角色（首次启动 / 角色包缺失时回退）
 DEFAULT_CHARACTER_ID = "kiki"
 
-# 兼容旧路径：若仍有根目录 assets/，可作为最后回退
-LEGACY_ASSETS_DIR = RESOURCE_DIR / "assets"
-
 # ---------------------------------------------------------------------------
 # 番茄钟默认值（分钟）— 引擎级，角色包可覆盖
 # ---------------------------------------------------------------------------
@@ -125,9 +122,24 @@ IDLE_RANDOM_STILL_HOLD_MS = 2200
 # 可参与随机的状态（角色包无该状态则自动跳过）
 IDLE_RANDOM_STATES = ("fly", "eat", "timemachine", "drink")
 
+# ---------------------------------------------------------------------------
+# 状态轮播（自动定期切换 preview / drink / fly / eat / focus / idle）
+# ---------------------------------------------------------------------------
+# 外循环：两次轮播之间随机多少小时
+STATE_CAROUSEL_MIN_HOURS = 1
+STATE_CAROUSEL_MAX_HOURS = 3
+# 内循环：在上述小时基础上再随机多少分钟（0-59）
+STATE_CAROUSEL_MIN_MINUTES = 0
+STATE_CAROUSEL_MAX_MINUTES = 59
+# 轮播进入某个状态后保持多久再回 idle（毫秒）
+STATE_CAROUSEL_HOLD_MIN_MS = 25_000
+STATE_CAROUSEL_HOLD_MAX_MS = 55_000
+# 可参与轮播的状态（角色包无该状态则自动跳过）
+STATE_CAROUSEL_STATES = ("preview", "drink", "fly", "eat", "focus", "idle")
+
 # 标准状态键（角色包必须至少提供 idle；其余缺失时回退 idle 或程序占位）
 REQUIRED_STATES = ("idle",)
-OPTIONAL_STATES = ("focus", "eat", "fly", "timemachine", "drink", "hungry")
+OPTIONAL_STATES = ("focus", "eat", "fly", "timemachine", "drink", "hungry", "preview")
 ALL_STATES = REQUIRED_STATES + OPTIONAL_STATES
 
 
@@ -139,3 +151,4 @@ class PetState:
     TIME_MACHINE = "timemachine"
     DRINK = "drink"
     HUNGRY = "hungry"
+    PREVIEW = "preview"

@@ -7,6 +7,8 @@ from datetime import date, timedelta
 from tkinter import ttk
 from typing import TYPE_CHECKING
 
+from ui.theme import Colors, Fonts, apply_window_bg, configure_ttk_styles
+
 if TYPE_CHECKING:
     from app import DesktopPetApp
 
@@ -25,16 +27,18 @@ class TimeMachinePanel:
             self.win.lift()
             return
 
+        configure_ttk_styles()
         win = tk.Toplevel(self.app.root)
+        apply_window_bg(win)
         win.title(self.app.character.ui_text("timemachine_title"))
         win.attributes("-topmost", True)
-        win.geometry("520x420")
+        win.geometry("560x460")
         win.protocol("WM_DELETE_WINDOW", self.close)
         self.win = win
 
-        top = ttk.Frame(win, padding=10)
+        top = tk.Frame(win, bg=Colors.BG_WINDOW, padx=14, pady=12)
         top.pack(fill="x")
-        ttk.Label(top, text="选择日期").pack(side="left")
+        tk.Label(top, text="选择日期", bg=Colors.BG_WINDOW, fg=Colors.TEXT_MAIN, font=Fonts.body()).pack(side="left")
         dates = self.app.storage.list_available_dates()
         if not dates:
             today = date.today()
@@ -43,13 +47,40 @@ class TimeMachinePanel:
         combo = ttk.Combobox(top, textvariable=self.date_var, values=dates, width=16, state="readonly")
         combo.pack(side="left", padx=8)
         combo.bind("<<ComboboxSelected>>", lambda _e: self._load())
-        ttk.Button(top, text="昨天", command=self._select_yesterday).pack(side="left", padx=4)
-        ttk.Button(top, text="刷新", command=self._load).pack(side="left", padx=4)
+        for text, cmd in (
+            ("昨天", self._select_yesterday),
+            ("刷新", self._load),
+        ):
+            tk.Button(
+                top,
+                text=text,
+                command=cmd,
+                bg=Colors.BG_CARD,
+                fg=Colors.TEXT_MAIN,
+                activebackground=Colors.BG_HOVER,
+                activeforeground=Colors.TEXT_MAIN,
+                relief="solid",
+                bd=1,
+                highlightbackground=Colors.BORDER,
+                highlightthickness=1,
+                font=Fonts.body(),
+                padx=8,
+                pady=3,
+                cursor="hand2",
+            ).pack(side="left", padx=4)
 
-        ttk.Label(win, textvariable=self.summary_var, padding=10, justify="left").pack(fill="x")
+        tk.Label(
+            win,
+            textvariable=self.summary_var,
+            bg=Colors.BG_WINDOW,
+            fg=Colors.TEXT_SECONDARY,
+            font=Fonts.body(),
+            padx=14,
+            justify="left",
+        ).pack(fill="x")
 
         notebook = ttk.Notebook(win)
-        notebook.pack(fill="both", expand=True, padx=10, pady=6)
+        notebook.pack(fill="both", expand=True, padx=14, pady=8)
 
         task_frame = ttk.Frame(notebook)
         session_frame = ttk.Frame(notebook)

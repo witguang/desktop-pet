@@ -7,6 +7,7 @@ from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING
 
 from core.character_pack import CharacterPack, discover_characters
+from ui.theme import Colors, Fonts, apply_window_bg, configure_ttk_styles
 from utils.asset_loader import AssetLoader
 
 if TYPE_CHECKING:
@@ -26,37 +27,73 @@ class CharacterPicker:
             self.refresh()
             return
 
+        configure_ttk_styles()
         win = tk.Toplevel(self.app.root)
+        apply_window_bg(win)
         win.title("切换角色 · Character Packs")
         win.attributes("-topmost", True)
-        win.geometry("480x420")
+        win.geometry("520x460")
         win.protocol("WM_DELETE_WINDOW", self.close)
         self.win = win
 
-        header = ttk.Frame(win, padding=10)
+        header = tk.Frame(win, bg=Colors.BG_WINDOW, padx=14, pady=12)
         header.pack(fill="x")
-        ttk.Label(
+        tk.Label(
             header,
-            text="选择角色包（放入 characters/ 即可被发现）",
-            font=("Microsoft YaHei UI", 11, "bold"),
+            text="选择角色包",
+            font=Fonts.title(),
+            bg=Colors.BG_WINDOW,
+            fg=Colors.TEXT_MAIN,
         ).pack(side="left")
-        ttk.Button(header, text="刷新", command=self.refresh).pack(side="right", padx=4)
-        ttk.Button(header, text="打开角色目录", command=self._open_folder).pack(side="right")
+        btn_box = tk.Frame(header, bg=Colors.BG_WINDOW)
+        btn_box.pack(side="right")
+        tk.Button(
+            btn_box,
+            text="刷新",
+            command=self.refresh,
+            bg=Colors.BG_CARD,
+            fg=Colors.TEXT_MAIN,
+            activebackground=Colors.BG_HOVER,
+            activeforeground=Colors.TEXT_MAIN,
+            relief="solid",
+            bd=1,
+            highlightbackground=Colors.BORDER,
+            highlightthickness=1,
+            font=Fonts.body(),
+            padx=8,
+            pady=3,
+            cursor="hand2",
+        ).pack(side="right", padx=4)
+        tk.Button(
+            btn_box,
+            text="打开角色目录",
+            command=self._open_folder,
+            bg=Colors.PRIMARY,
+            fg=Colors.TEXT_ON_PRIMARY,
+            activebackground=Colors.PRIMARY_DARK,
+            activeforeground=Colors.TEXT_ON_PRIMARY,
+            relief="flat",
+            font=Fonts.body(),
+            padx=8,
+            pady=3,
+            cursor="hand2",
+        ).pack(side="right")
 
-        tip = ttk.Label(
+        tk.Label(
             win,
             text="提示：复制 characters/_template 并替换图片，即可自定义新角色，无需改代码。",
-            foreground="#555555",
-            padding=(10, 0),
-        )
-        tip.pack(fill="x")
+            fg=Colors.TEXT_MUTED,
+            bg=Colors.BG_WINDOW,
+            font=Fonts.small(),
+            padx=14,
+        ).pack(fill="x")
 
-        canvas_frame = ttk.Frame(win)
-        canvas_frame.pack(fill="both", expand=True, padx=8, pady=8)
+        canvas_frame = tk.Frame(win, bg=Colors.BG_WINDOW, padx=14, pady=8)
+        canvas_frame.pack(fill="both", expand=True)
 
-        self.canvas = tk.Canvas(canvas_frame, highlightthickness=0)
+        self.canvas = tk.Canvas(canvas_frame, highlightthickness=0, bg=Colors.BG_WINDOW)
         scroll = ttk.Scrollbar(canvas_frame, orient="vertical", command=self.canvas.yview)
-        self.list_frame = ttk.Frame(self.canvas)
+        self.list_frame = tk.Frame(self.canvas, bg=Colors.BG_WINDOW)
         self.list_frame.bind(
             "<Configure>",
             lambda _e: self.canvas.configure(scrollregion=self.canvas.bbox("all")),
@@ -68,7 +105,15 @@ class CharacterPicker:
         self.canvas.bind("<Configure>", self._on_canvas_configure)
 
         self.status_var = tk.StringVar()
-        ttk.Label(win, textvariable=self.status_var, padding=8).pack(fill="x")
+        tk.Label(
+            win,
+            textvariable=self.status_var,
+            bg=Colors.BG_WINDOW,
+            fg=Colors.TEXT_SECONDARY,
+            font=Fonts.body(),
+            padx=14,
+            pady=8,
+        ).pack(fill="x")
 
         self.refresh()
 
@@ -112,16 +157,23 @@ class CharacterPicker:
             self._add_card(pack, is_current=(pack.id == current_id))
 
     def _add_card(self, pack: CharacterPack, is_current: bool) -> None:
-        style_bg = "#E8F5E9" if is_current else "#F7F7F7"
-        card = tk.Frame(self.list_frame, bg=style_bg, highlightbackground="#CCCCCC", highlightthickness=1)
-        card.pack(fill="x", padx=4, pady=4)
+        style_bg = Colors.BG_HOVER if is_current else Colors.BG_CARD
+        card = tk.Frame(
+            self.list_frame,
+            bg=style_bg,
+            highlightbackground=Colors.BORDER,
+            highlightthickness=1,
+            padx=10,
+            pady=10,
+        )
+        card.pack(fill="x", padx=4, pady=5)
 
         # 预览图：临时 loader
         preview_label = tk.Label(card, bg=style_bg)
-        preview_label.pack(side="left", padx=8, pady=8)
+        preview_label.pack(side="left", padx=(0, 12))
         try:
             tmp_loader = AssetLoader(pack)
-            photo = tmp_loader.get_preview_photo((56, 56))
+            photo = tmp_loader.get_preview_photo((64, 64))
             if photo:
                 preview_label.configure(image=photo)
                 preview_label.image = photo
@@ -131,22 +183,23 @@ class CharacterPicker:
             preview_label.configure(text="?", width=6)
 
         info = tk.Frame(card, bg=style_bg)
-        info.pack(side="left", fill="both", expand=True, pady=8)
+        info.pack(side="left", fill="both", expand=True)
         title = f"{pack.name}"
         if pack.name_en and pack.name_en != pack.name:
             title += f"  ({pack.name_en})"
         if is_current:
             title += "  ✓ 当前"
-        tk.Label(info, text=title, bg=style_bg, font=("Microsoft YaHei UI", 11, "bold"), anchor="w").pack(fill="x")
+        tk.Label(info, text=title, bg=style_bg, fg=Colors.TEXT_MAIN, font=Fonts.heading(bold=True), anchor="w").pack(fill="x")
         tk.Label(
             info,
             text=f"id: {pack.id}  ·  v{pack.version}  ·  {pack.author or 'unknown'}",
             bg=style_bg,
-            fg="#666666",
+            fg=Colors.TEXT_SECONDARY,
+            font=Fonts.small(),
             anchor="w",
         ).pack(fill="x")
         desc = pack.description or f"喜欢{pack.food.name} {pack.food.emoji}"
-        tk.Label(info, text=desc, bg=style_bg, fg="#444444", anchor="w", wraplength=260, justify="left").pack(fill="x")
+        tk.Label(info, text=desc, bg=style_bg, fg=Colors.TEXT_MAIN, font=Fonts.body(), anchor="w", wraplength=260, justify="left").pack(fill="x")
 
         missing = pack.missing_assets()
         if missing:
@@ -154,19 +207,29 @@ class CharacterPicker:
                 info,
                 text=f"缺少素材: {', '.join(missing[:4])}{'…' if len(missing) > 4 else ''}",
                 bg=style_bg,
-                fg="#C62828",
+                fg=Colors.DANGER,
+                font=Fonts.small(),
                 anchor="w",
             ).pack(fill="x")
 
         btn_frame = tk.Frame(card, bg=style_bg)
-        btn_frame.pack(side="right", padx=8)
+        btn_frame.pack(side="right", padx=(8, 0))
         if is_current:
-            tk.Label(btn_frame, text="使用中", bg=style_bg, fg="#2E7D32").pack()
+            tk.Label(btn_frame, text="使用中", bg=style_bg, fg=Colors.SUCCESS, font=Fonts.body(bold=True)).pack()
         else:
-            ttk.Button(
+            tk.Button(
                 btn_frame,
                 text="使用",
                 command=lambda p=pack: self._select(p),
+                bg=Colors.PRIMARY,
+                fg=Colors.TEXT_ON_PRIMARY,
+                activebackground=Colors.PRIMARY_DARK,
+                activeforeground=Colors.TEXT_ON_PRIMARY,
+                relief="flat",
+                font=Fonts.body(),
+                padx=12,
+                pady=4,
+                cursor="hand2",
             ).pack()
 
     def _select(self, pack: CharacterPack) -> None:

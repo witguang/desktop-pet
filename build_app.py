@@ -35,11 +35,13 @@ def main() -> int:
             print(f"Removing {p} ...")
             shutil.rmtree(p, ignore_errors=True)
 
+    # 确保 Kiki 应用图标存在（快捷方式 + exe 图标）
+    icon_path = _ensure_app_icon()
+
     # Windows uses ";" in --add-data; other OS use ":"
     sep = ";" if sys.platform.startswith("win") else ":"
     add_data = [
         f"characters{sep}characters",
-        f"assets{sep}assets",
         f"VERSION{sep}.",
     ]
 
@@ -59,6 +61,8 @@ def main() -> int:
     ]
     for item in add_data:
         common.extend(["--add-data", item])
+    if icon_path is not None:
+        common.extend(["--icon", str(icon_path)])
 
     # Main app
     run(common + ["--name", "DesktopPet", str(ROOT / "main.py")])
@@ -91,13 +95,53 @@ def main() -> int:
     # 把业务源码拷到 exe 旁，供 GitHub 源码更新 + external_source 热加载
     _copy_sources_beside_exe(main_dir)
 
+    # 根目录再放一份 app.ico，便于快捷方式 IconLocation
+    if icon_path is not None and icon_path.is_file():
+        shutil.copy2(icon_path, main_dir / "app.ico")
+
     print("OK:", exe)
     setup = main_dir / "DesktopPetSetup.exe"
     if setup.exists():
         print("OK:", setup)
     print("Share the whole folder: dist/DesktopPet/")
     print("Friends can run DesktopPetSetup.exe to pick install + memo folders.")
+    print("Daily launch: DesktopPet.exe (Kiki desktop pet).")
     return 0
+
+
+def _ensure_app_icon() -> Path | None:
+    """从 Kiki preview/idle 生成 app.ico（若不存在或过旧则重建）。"""
+    out = ROOT / "app.ico"
+    sources = [
+        ROOT / "characters" / "kiki" / "assets" / "preview.png",
+        ROOT / "characters" / "kiki" / "assets" / "idle.png",
+    ]
+    src = next((p for p in sources if p.is_file()), None)
+    if src is None:
+        print("WARN: no kiki image for app.ico")
+        return out if out.is_file() else None
+
+    try:
+        need = True
+        if out.is_file():
+            need = out.stat().st_mtime < src.stat().st_mtime
+        if need:
+            from PIL import Image
+
+            img = Image.open(src).convert("RGBA")
+            w, h = img.size
+            side = min(w, h)
+            left = (w - side) // 2
+            top = (h - side) // 2
+            img = img.crop((left, top, left + side, top + side))
+            sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+            out.parent.mkdir(parents=True, exist_ok=True)
+            img.save(out, format="ICO", sizes=sizes)
+            print(f"Generated icon: {out}")
+        return out
+    except Exception as exc:
+        print(f"WARN: could not build app.ico: {exc}")
+        return out if out.is_file() else None
 
 
 def _copy_sources_beside_exe(main_dir: Path) -> None:
@@ -114,12 +158,15 @@ def _copy_sources_beside_exe(main_dir: Path) -> None:
         "build_app.py",
         "build_app.bat",
         "install_app.py",
+        "app.ico",
     ]
-    dirs = ["core", "data", "ui", "utils", "characters", "assets"]
+    dirs = ["core", "data", "ui", "utils", "characters"]
     for name in patterns:
         src = ROOT / name
         if src.is_file():
-            shutil.copy2(src, main_dir / name)
+            dest = main_dir / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
     for d in dirs:
         src = ROOT / d
         dst = main_dir / d

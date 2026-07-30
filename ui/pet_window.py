@@ -40,6 +40,7 @@ class PetWindow:
         self._frames_played_in_loop = 0
         self._settled = True
         self._on_settle: Callable[[], None] | None = None
+        self._topmost_job: str | None = None
 
         self._setup_window()
         self._build_widgets()
@@ -57,6 +58,7 @@ class PetWindow:
         self._apply_transparency()
         w, h = self.loader.pet_size
         self.root.geometry(f"{w}x{h}")
+        self._schedule_topmost()
 
     def _apply_transparency(self) -> None:
         color = self.transparent_color
@@ -68,6 +70,29 @@ class PetWindow:
             except tk.TclError:
                 pass
         self.root.configure(bg=color)
+
+    def _schedule_topmost(self, interval_ms: int = 5000) -> None:
+        """定期刷新置顶状态，防止被其他窗口覆盖后沉下去。"""
+        self.cancel_topmost_job()
+        self._topmost_job = self.root.after(interval_ms, self._enforce_topmost)
+
+    def _enforce_topmost(self) -> None:
+        """强制置顶并提到最前，然后重新调度。"""
+        self._topmost_job = None
+        try:
+            self.root.attributes("-topmost", True)
+            self.root.lift()
+        except tk.TclError:
+            pass
+        self._schedule_topmost()
+
+    def cancel_topmost_job(self) -> None:
+        if self._topmost_job:
+            try:
+                self.root.after_cancel(self._topmost_job)
+            except Exception:
+                pass
+            self._topmost_job = None
 
     def _build_widgets(self) -> None:
         self.label = tk.Label(self.root, bg=self.transparent_color, bd=0, cursor="hand2")
@@ -95,6 +120,7 @@ class PetWindow:
         x, y = self.root.winfo_x(), self.root.winfo_y()
         self.root.geometry(f"{w}x{h}+{x}+{y}")
         self.set_state(self._current_state)
+        self._schedule_topmost()
 
     def _on_press(self, event: tk.Event) -> None:
         self._drag_ox = event.x_root - self.root.winfo_x()

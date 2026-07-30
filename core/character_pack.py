@@ -182,6 +182,17 @@ class CharacterPack:
             if state in ("food", "dorayaki", self.food.id):
                 p = self.assets_dir / self.food.file
                 return p if p.exists() else None
+            # preview 状态优先使用角色包声明的 preview_file，再回退常见文件名
+            if state == "preview":
+                if self.preview_file:
+                    p = self.assets_dir / self.preview_file
+                    if p.exists():
+                        return p
+                for name in ("preview.png", "preview.gif", "preview.webp"):
+                    p = self.assets_dir / name
+                    if p.exists():
+                        return p
+                return None
             return None
         path = self.assets_dir / asset.file
         return path if path.exists() else None

@@ -22,6 +22,13 @@ from config import (
     IDLE_RANDOM_MIN_SEC,
     IDLE_RANDOM_STATES,
     IDLE_RANDOM_STILL_HOLD_MS,
+    STATE_CAROUSEL_HOLD_MAX_MS,
+    STATE_CAROUSEL_HOLD_MIN_MS,
+    STATE_CAROUSEL_MAX_HOURS,
+    STATE_CAROUSEL_MAX_MINUTES,
+    STATE_CAROUSEL_MIN_HOURS,
+    STATE_CAROUSEL_MIN_MINUTES,
+    STATE_CAROUSEL_STATES,
     WATER_CHECK_INTERVAL_MS,
     PetState,
 )
@@ -101,6 +108,7 @@ class DesktopPetApp:
         self._hotkeys_enabled = False
         self._loops_started = False
         self._random_idle_job: str | None = None
+        self._carousel_job: str | None = None
 
         self.pet = PetWindow(
             self.root,
@@ -130,6 +138,7 @@ class DesktopPetApp:
         self._try_register_hotkeys()
         self._schedule_loops()
         self._schedule_random_idle()
+        self._schedule_state_carousel()
 
         self.root.after(
             600,
@@ -298,6 +307,81 @@ class DesktopPetApp:
             duration_ms=duration,
             bubble=None,
             still_hold_ms=IDLE_RANDOM_STILL_HOLD_MS,
+        )
+
+    # ------------------------------------------------------------------
+    # 状态轮播（小时级随机间隔自动切换 preview/drink/fly/eat/focus/idle）
+    # ------------------------------------------------------------------
+    def _schedule_state_carousel(self) -> None:
+        if self._carousel_job:
+            try:
+                self.root.after_cancel(self._carousel_job)
+            except Exception:
+                pass
+        hours = random.randint(STATE_CAROUSEL_MIN_HOURS, STATE_CAROUSEL_MAX_HOURS)
+        minutes = random.randint(STATE_CAROUSEL_MIN_MINUTES, STATE_CAROUSEL_MAX_MINUTES)
+        delay_ms = (hours * 3600 + minutes * 60) * 1000
+        self._carousel_job = self.root.after(delay_ms, self._tick_state_carousel)
+
+    def _tick_state_carousel(self) -> None:
+        self._carousel_job = None
+        try:
+            self._maybe_carousel_switch()
+        finally:
+            self._schedule_state_carousel()
+
+    def _maybe_carousel_switch(self) -> None:
+        """在基础空闲态时随机切换一个状态，展示一段时间后回到 idle。"""
+        if self.reminders.is_locked:
+            return
+        if self._temp_job is not None:
+            return
+        if self.state_machine.state not in (PetState.IDLE, PetState.HUNGRY):
+            return
+
+        candidates: list[str] = []
+        for st in STATE_CAROUSEL_STATES:
+            if st in self.character.states:
+                candidates.append(st)
+            elif self.character.state_path(st) is not None:
+                candidates.append(st)
+        if not candidates:
+            return
+
+        state = random.choice(candidates)
+        hold_ms = random.randint(STATE_CAROUSEL_HOLD_MIN_MS, STATE_CAROUSEL_HOLD_MAX_MS)
+
+        if state == PetState.IDLE:
+            self.state_machine.recompute()
+            return
+
+        if state == PetState.FOCUS:
+            # focus 作为临时展示态，保持后回到基础态
+            self._enter_temporary(
+                PetState.FOCUS,
+                duration_ms=hold_ms,
+                bubble=None,
+                still_hold_ms=None,
+            )
+            return
+
+        anim = self.character.raw.get("animation") or {}
+        if state == PetState.FLY:
+            motion_ms = int(anim.get("fly_ms", FLY_ANIMATION_MS))
+        elif state == PetState.DRINK:
+            motion_ms = int(anim.get("drink_ms", 2200))
+        elif state == PetState.EAT:
+            motion_ms = int(anim.get("eat_ms", self.character.eat_animation_ms))
+        elif state == PetState.PREVIEW:
+            motion_ms = int(anim.get("preview_ms", 2000))
+        else:
+            motion_ms = int(anim.get("eat_ms", self.character.eat_animation_ms))
+
+        self._enter_temporary(
+            state,
+            duration_ms=motion_ms,
+            bubble=None,
+            still_hold_ms=hold_ms,
         )
 
     # ------------------------------------------------------------------
@@ -669,6 +753,12 @@ class DesktopPetApp:
             except Exception:
                 pass
             self._random_idle_job = None
+        if self._carousel_job:
+            try:
+                self.root.after_cancel(self._carousel_job)
+            except Exception:
+                pass
+            self._carousel_job = None
         if self._temp_job:
             try:
                 self.root.after_cancel(self._temp_job)
@@ -727,34 +817,30 @@ def main() -> int:
 
     force_setup = "--setup" in args
     from ui.setup_wizard import SetupWizard, needs_setup
-    from utils.install_util import find_app_source, find_main_exe
 
     if force_setup or needs_setup():
-        # 打包 exe 首次启动：完整安装（自选目录）；开发模式：只配备忘录
-        if force_setup:
-            mode = "first_run"
-        elif getattr(sys, "frozen", False):
-            mode = "install"
-        else:
-            mode = "first_run"
-        wizard = SetupWizard(mode=mode)
+        # DesktopPet.exe / 开发模式：可选择安装位置（默认当前目录）+ 备忘录。
+        # 完整安装向导由 DesktopPetSetup.exe 或 --install 触发。
+        wizard = SetupWizard(mode="first_run")
         ok = wizard.run()
         if not ok:
             if force_setup or needs_setup():
                 return 1
-        elif mode == "install":
-            # 已复制到新目录：从安装目录启动并退出当前进程
-            installed = find_main_exe(wizard.install_dir)
-            src = find_app_source()
-            if (
-                installed
-                and installed.suffix.lower() == ".exe"
-                and installed.parent.resolve() != src.resolve()
-            ):
+        # 若用户把程序复制到了新位置，启动新实例后当前实例退出
+        if wizard.relaunch_exe:
+            try:
                 import subprocess
 
-                subprocess.Popen([str(installed)], cwd=str(installed.parent))
-                return 0
+                subprocess.Popen(
+                    [str(wizard.relaunch_exe)],
+                    cwd=str(wizard.relaunch_exe.parent),
+                )
+            except Exception as exc:
+                messagebox.showerror(
+                    "启动失败",
+                    f"无法启动新位置的程序：\n{exc}",
+                )
+            return 0
 
     if "--character" in args:
         i = args.index("--character")

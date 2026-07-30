@@ -7,6 +7,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import Callable
 
+from ui.theme import Colors, Fonts, apply_window_bg, configure_ttk_styles
 from utils.install_util import (
     copy_app_tree,
     create_windows_shortcut,
@@ -22,6 +23,8 @@ from utils.install_util import (
 class SetupWizard:
     """
     阻塞式向导。run() 返回 True 表示完成并应启动应用；False 表示取消。
+    若 first_run 模式下用户修改了安装位置，relaunch_exe 将指向新位置的入口，
+    调用者应启动该入口后退出当前实例。
     """
 
     def __init__(
@@ -32,18 +35,21 @@ class SetupWizard:
     ) -> None:
         """
         mode:
-          - first_run: 当前目录即运行目录，只配备忘录 + 快捷方式
+          - first_run: 可选择安装位置（默认当前目录）并配备忘录
           - install: 可选择安装位置并复制程序
         """
         self.mode = mode
         self.on_done = on_done
         self.result_ok = False
-        self.install_dir = default_install_dir()
+        self.relaunch_exe: Path | None = None
+        self.install_dir = default_install_dir() if mode == "install" else find_app_source()
         self.memo_dir = default_memo_suggestion()
         self._root: tk.Tk | None = None
 
     def run(self) -> bool:
+        configure_ttk_styles()
         root = tk.Tk()
+        apply_window_bg(root)
         self._root = root
         root.title("Desktop Pet 安装向导" if self.mode == "install" else "Desktop Pet 初始设置")
         root.resizable(False, False)
@@ -54,75 +60,176 @@ class SetupWizard:
         shortcut_var = tk.BooleanVar(value=True)
         status_var = tk.StringVar(value="")
 
-        frame = ttk.Frame(root, padding=16)
+        frame = tk.Frame(root, bg=Colors.BG_WINDOW, padx=20, pady=20)
         frame.grid(row=0, column=0, sticky="nsew")
 
         title = "安装向导" if self.mode == "install" else "欢迎使用桌面宠物"
-        ttk.Label(frame, text=title, font=("Microsoft YaHei UI", 14, "bold")).grid(
-            row=0, column=0, columnspan=3, sticky="w", pady=(0, 8)
-        )
-        ttk.Label(
+        tk.Label(
+            frame,
+            text=title,
+            font=Fonts.title(size=16),
+            bg=Colors.BG_WINDOW,
+            fg=Colors.TEXT_MAIN,
+        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
+        tk.Label(
             frame,
             text="请选择安装位置与备忘录保存位置（可浏览自定义）。",
-            foreground="#444444",
-        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(0, 12))
+            fg=Colors.TEXT_SECONDARY,
+            bg=Colors.BG_WINDOW,
+            font=Fonts.body(),
+        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(0, 16))
 
         row = 2
-        if self.mode == "install":
-            box = ttk.LabelFrame(frame, text="程序安装位置", padding=10)
-            box.grid(row=row, column=0, columnspan=3, sticky="ew", pady=4)
-            box.columnconfigure(0, weight=1)
-            ttk.Entry(box, textvariable=install_var, width=52).grid(row=0, column=0, sticky="ew", padx=(0, 6))
-            ttk.Button(
-                box,
-                text="浏览…",
-                width=8,
-                command=lambda: self._browse_dir(install_var, "选择安装文件夹"),
-            ).grid(row=0, column=1)
-            ttk.Label(
-                box,
-                text="程序文件将复制到此目录（可自由选择盘符与文件夹）。",
-                foreground="#666666",
-                font=("Microsoft YaHei UI", 8),
-            ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
-            row += 1
+        box = tk.LabelFrame(
+            frame,
+            text=" 程序安装位置 ",
+            bg=Colors.BG_CARD,
+            fg=Colors.PRIMARY,
+            font=Fonts.body(bold=True),
+            relief="solid",
+            bd=1,
+            padx=12,
+            pady=12,
+        )
+        box.grid(row=row, column=0, columnspan=3, sticky="ew", pady=6)
+        box.columnconfigure(0, weight=1)
+        tk.Entry(
+            box,
+            textvariable=install_var,
+            width=52,
+            bg=Colors.BG_INPUT,
+            fg=Colors.TEXT_MAIN,
+            relief="solid",
+            bd=1,
+            font=Fonts.body(),
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        tk.Button(
+            box,
+            text="浏览…",
+            width=8,
+            command=lambda: self._browse_dir(install_var, "选择安装文件夹"),
+            bg=Colors.PRIMARY,
+            fg=Colors.TEXT_ON_PRIMARY,
+            activebackground=Colors.PRIMARY_DARK,
+            activeforeground=Colors.TEXT_ON_PRIMARY,
+            relief="flat",
+            font=Fonts.body(),
+            cursor="hand2",
+        ).grid(row=0, column=1)
+        install_hint = (
+            "程序文件将复制到此目录（可自由选择盘符与文件夹）。"
+            if self.mode == "install"
+            else "留空则使用当前目录；改到其他位置会复制程序并需重新启动。"
+        )
+        tk.Label(
+            box,
+            text=install_hint,
+            fg=Colors.TEXT_MUTED,
+            bg=Colors.BG_CARD,
+            font=Fonts.small(),
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        row += 1
 
-        memo_box = ttk.LabelFrame(frame, text="备忘录保存位置", padding=10)
-        memo_box.grid(row=row, column=0, columnspan=3, sticky="ew", pady=4)
+        memo_box = tk.LabelFrame(
+            frame,
+            text=" 备忘录保存位置 ",
+            bg=Colors.BG_CARD,
+            fg=Colors.PRIMARY,
+            font=Fonts.body(bold=True),
+            relief="solid",
+            bd=1,
+            padx=12,
+            pady=12,
+        )
+        memo_box.grid(row=row, column=0, columnspan=3, sticky="ew", pady=6)
         memo_box.columnconfigure(0, weight=1)
-        ttk.Entry(memo_box, textvariable=memo_var, width=52).grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        ttk.Button(
+        tk.Entry(
+            memo_box,
+            textvariable=memo_var,
+            width=52,
+            bg=Colors.BG_INPUT,
+            fg=Colors.TEXT_MAIN,
+            relief="solid",
+            bd=1,
+            font=Fonts.body(),
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        tk.Button(
             memo_box,
             text="浏览…",
             width=8,
             command=lambda: self._browse_dir(memo_var, "选择备忘录文件夹"),
+            bg=Colors.PRIMARY,
+            fg=Colors.TEXT_ON_PRIMARY,
+            activebackground=Colors.PRIMARY_DARK,
+            activeforeground=Colors.TEXT_ON_PRIMARY,
+            relief="flat",
+            font=Fonts.body(),
+            cursor="hand2",
         ).grid(row=0, column=1)
-        ttk.Label(
+        tk.Label(
             memo_box,
             text="每日笔记（如 2026-07-30.md）写在这里，可选 Obsidian 库目录。",
-            foreground="#666666",
-            font=("Microsoft YaHei UI", 8),
-        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
+            fg=Colors.TEXT_MUTED,
+            bg=Colors.BG_CARD,
+            font=Fonts.small(),
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
         row += 1
 
-        ttk.Checkbutton(
+        cb = tk.Checkbutton(
             frame,
             text="在桌面创建快捷方式",
             variable=shortcut_var,
-        ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(10, 4))
+            bg=Colors.BG_WINDOW,
+            fg=Colors.TEXT_MAIN,
+            activebackground=Colors.BG_WINDOW,
+            activeforeground=Colors.TEXT_MAIN,
+            selectcolor=Colors.BG_CARD,
+            font=Fonts.body(),
+        )
+        cb.grid(row=row, column=0, columnspan=3, sticky="w", pady=(12, 4))
         row += 1
 
-        ttk.Label(frame, textvariable=status_var, foreground="#1565C0").grid(
+        tk.Label(frame, textvariable=status_var, fg=Colors.PRIMARY, bg=Colors.BG_WINDOW, font=Fonts.body()).grid(
             row=row, column=0, columnspan=3, sticky="w", pady=6
         )
         row += 1
 
-        btns = ttk.Frame(frame)
-        btns.grid(row=row, column=0, columnspan=3, sticky="e", pady=(12, 0))
+        btns = tk.Frame(frame, bg=Colors.BG_WINDOW)
+        btns.grid(row=row, column=0, columnspan=3, sticky="e", pady=(16, 0))
 
         def do_cancel() -> None:
             self.result_ok = False
             root.destroy()
+
+        tk.Button(
+            btns,
+            text="取消",
+            command=do_cancel,
+            width=10,
+            bg=Colors.BG_CARD,
+            fg=Colors.TEXT_MAIN,
+            activebackground=Colors.BG_HOVER,
+            activeforeground=Colors.TEXT_MAIN,
+            relief="solid",
+            bd=1,
+            highlightbackground=Colors.BORDER,
+            highlightthickness=1,
+            font=Fonts.body(),
+            cursor="hand2",
+        ).pack(side="left", padx=4)
+        tk.Button(
+            btns,
+            text="安装并完成" if self.mode == "install" else "完成并启动",
+            command=do_finish,
+            width=14,
+            bg=Colors.PRIMARY,
+            fg=Colors.TEXT_ON_PRIMARY,
+            activebackground=Colors.PRIMARY_DARK,
+            activeforeground=Colors.TEXT_ON_PRIMARY,
+            relief="flat",
+            font=Fonts.body(bold=True),
+            cursor="hand2",
+        ).pack(side="left", padx=4)
 
         def do_finish() -> None:
             install_path = Path(install_var.get().strip()).expanduser()
@@ -137,17 +244,20 @@ class SetupWizard:
                 return
 
             src = find_app_source()
-            target = src if self.mode == "first_run" else install_path
+            target = install_path
 
-            if self.mode == "install":
-                if not install_path.as_posix().strip("."):
-                    messagebox.showwarning("提示", "请填写安装位置。", parent=root)
-                    return
-                try:
-                    install_path.mkdir(parents=True, exist_ok=True)
-                except OSError as exc:
-                    messagebox.showerror("错误", f"无法创建安装目录：\n{exc}", parent=root)
-                    return
+            if not install_path.as_posix().strip("."):
+                messagebox.showwarning("提示", "请填写安装位置。", parent=root)
+                return
+            try:
+                install_path.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                messagebox.showerror("错误", f"无法创建安装目录：\n{exc}", parent=root)
+                return
+
+            # first_run 模式下若安装位置就是当前目录，无需复制
+            needs_copy = src.resolve() != install_path.resolve()
+            if needs_copy:
                 status_var.set("正在复制文件，请稍候…")
                 root.update_idletasks()
                 try:
@@ -156,7 +266,6 @@ class SetupWizard:
                 except OSError as exc:
                     messagebox.showerror("复制失败", str(exc), parent=root)
                     return
-                target = install_path
 
             try:
                 write_initial_settings(target, memo_dir=memo_path)
@@ -176,19 +285,24 @@ class SetupWizard:
             self.memo_dir = memo_path
             self.result_ok = True
 
+            # 若 first_run 模式下移动了安装位置，需要从新位置重启
+            if self.mode == "first_run" and needs_copy and exe:
+                self.relaunch_exe = exe
+                msg = (
+                    f"设置完成！程序已复制到新位置：\n\n{target}\n\n"
+                    f"请从新位置的 DesktopPet.exe 启动。"
+                )
+                messagebox.showinfo("完成", msg, parent=root)
+                root.destroy()
+                return
+
             msg = f"设置完成！\n\n程序目录：\n{target}\n\n备忘录目录：\n{memo_path}"
             if self.mode == "install" and exe:
                 msg += f"\n\n请运行：\n{exe}"
             messagebox.showinfo("完成", msg, parent=root)
             root.destroy()
 
-        ttk.Button(btns, text="取消", command=do_cancel, width=10).pack(side="left", padx=4)
-        ttk.Button(
-            btns,
-            text="安装并完成" if self.mode == "install" else "完成并启动",
-            command=do_finish,
-            width=14,
-        ).pack(side="left", padx=4)
+
 
         # center
         root.update_idletasks()

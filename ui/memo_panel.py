@@ -19,6 +19,7 @@ from data.memo_history import (
     record_version,
     restore_version,
 )
+from ui.theme import Colors, Fonts, apply_window_bg, configure_ttk_styles
 
 if TYPE_CHECKING:
     from app import DesktopPetApp
@@ -142,8 +143,10 @@ class MemoPanel:
                 self._text.focus_set()
             return
 
+        configure_ttk_styles()
         self._day = date.today()
         win = tk.Toplevel(self.app.root)
+        apply_window_bg(win)
         win.title(f"备忘录 · {self._day.isoformat()}")
         win.attributes("-topmost", True)
         win.minsize(520, 460)
@@ -152,41 +155,66 @@ class MemoPanel:
         self.win = win
 
         win.columnconfigure(0, weight=1)
-        win.rowconfigure(2, weight=1)
+        # 编辑区（board，第 3 行）是可扩展主体，底部状态栏保持可见
+        win.rowconfigure(3, weight=1)
 
-        top = ttk.Frame(win, padding=(12, 10, 12, 4))
-        top.grid(row=0, column=0, sticky="ew")
-        top.columnconfigure(0, weight=1)
-        ttk.Label(
+        top = tk.Frame(win, bg=Colors.BG_WINDOW)
+        top.grid(row=0, column=0, sticky="ew", padx=14, pady=(12, 4))
+        tk.Label(
             top,
             text=f"今日笔记  {self._day.isoformat()}.md",
-            font=("Microsoft YaHei UI", 12, "bold"),
-        ).grid(row=0, column=0, sticky="w")
-        btns = ttk.Frame(top)
-        btns.grid(row=0, column=1, sticky="e")
-        ttk.Button(btns, text="历史版本", command=self.open_history, width=10).pack(side="left", padx=2)
-        ttk.Button(btns, text="打开文件夹", command=self.open_memo_folder, width=10).pack(side="left", padx=2)
-        ttk.Button(btns, text="刷新", command=self.reload, width=8).pack(side="left", padx=2)
-        ttk.Button(btns, text="外部打开", command=self.open_external, width=10).pack(side="left", padx=2)
+            font=Fonts.title(),
+            bg=Colors.BG_WINDOW,
+            fg=Colors.TEXT_MAIN,
+        ).pack(anchor="w")
 
-        path_row = ttk.Frame(win, padding=(12, 0, 12, 4))
-        path_row.grid(row=1, column=0, sticky="ew")
+        btns = tk.Frame(win, bg=Colors.BG_WINDOW)
+        btns.grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 8))
+        for text_label, cmd, w in (
+            ("历史版本", self.open_history, 10),
+            ("打开文件夹", self.open_memo_folder, 10),
+            ("刷新", self.reload, 8),
+            ("外部打开", self.open_external, 10),
+        ):
+            tk.Button(
+                btns,
+                text=text_label,
+                command=cmd,
+                width=w,
+                bg=Colors.BG_CARD,
+                fg=Colors.TEXT_MAIN,
+                activebackground=Colors.BG_HOVER,
+                activeforeground=Colors.TEXT_MAIN,
+                relief="solid",
+                bd=1,
+                highlightbackground=Colors.BORDER,
+                highlightthickness=1,
+                font=Fonts.body(),
+                padx=8,
+                pady=4,
+                cursor="hand2",
+            ).pack(side="left", padx=3)
+
+        path_row = tk.Frame(win, bg=Colors.BG_WINDOW)
+        path_row.grid(row=2, column=0, sticky="ew", padx=14, pady=(0, 6))
         path_row.columnconfigure(0, weight=1)
-        ttk.Label(
+        tk.Label(
             path_row,
             textvariable=self._path_var,
-            foreground="#666666",
-            font=("Consolas", 8),
+            fg=Colors.TEXT_SECONDARY,
+            bg=Colors.BG_WINDOW,
+            font=Fonts.mono(size=8),
         ).grid(row=0, column=0, sticky="w")
-        ttk.Label(
+        tk.Label(
             path_row,
             text="默认序号列表 · 回车自动下一项 · 保存时重排序号 · 历史可恢复误删",
-            foreground="#888888",
-            font=("Microsoft YaHei UI", 8),
+            fg=Colors.TEXT_MUTED,
+            bg=Colors.BG_WINDOW,
+            font=Fonts.small(),
         ).grid(row=1, column=0, sticky="w", pady=(2, 0))
 
-        board = ttk.Frame(win, padding=(12, 4, 12, 4))
-        board.grid(row=2, column=0, sticky="nsew")
+        board = tk.Frame(win, bg=Colors.BG_WINDOW)
+        board.grid(row=3, column=0, sticky="nsew", padx=14, pady=(4, 6))
         board.columnconfigure(0, weight=1)
         board.rowconfigure(0, weight=1)
 
@@ -196,16 +224,18 @@ class MemoPanel:
             wrap="word",
             undo=True,
             maxundo=-1,
-            font=("Microsoft YaHei UI", 11),
-            bg="#FFFEF7",
-            fg="#1a1a1a",
-            insertbackground="#222222",
-            selectbackground="#FFE082",
-            selectforeground="#000000",
+            font=Fonts.body(size=11),
+            bg=Colors.BG_CARD,
+            fg=Colors.TEXT_MAIN,
+            insertbackground=Colors.PRIMARY,
+            selectbackground=Colors.PRIMARY,
+            selectforeground=Colors.TEXT_ON_PRIMARY,
             relief="solid",
             borderwidth=1,
-            padx=14,
-            pady=12,
+            highlightbackground=Colors.BORDER,
+            highlightthickness=1,
+            padx=16,
+            pady=14,
             spacing1=2,
             spacing3=4,
             yscrollcommand=scroll.set,
@@ -221,24 +251,49 @@ class MemoPanel:
         text.bind("<Return>", self._on_return)
         text.bind("<Button-1>", lambda _e: text.focus_set(), add="+")
 
-        bottom = ttk.Frame(win, padding=(12, 6, 12, 12))
-        bottom.grid(row=3, column=0, sticky="ew")
+        bottom = tk.Frame(win, bg=Colors.BG_WINDOW)
+        bottom.grid(row=4, column=0, sticky="ew", padx=14, pady=(6, 14))
         bottom.columnconfigure(0, weight=1)
-        ttk.Label(bottom, textvariable=self._status_var, foreground="#555555").grid(
-            row=0, column=0, sticky="w"
-        )
-        action = ttk.Frame(bottom)
+        tk.Label(
+            bottom,
+            textvariable=self._status_var,
+            fg=Colors.TEXT_SECONDARY,
+            bg=Colors.BG_WINDOW,
+            font=Fonts.small(),
+        ).grid(row=0, column=0, sticky="w")
+        action = tk.Frame(bottom, bg=Colors.BG_WINDOW)
         action.grid(row=0, column=1, sticky="e")
-        ttk.Button(action, text="重排序号", command=self.renumber_now, width=10).pack(side="left", padx=3)
-        ttk.Button(action, text="保存", command=lambda: self.save(quiet=False), width=8).pack(
-            side="left", padx=3
-        )
-        ttk.Button(action, text="关闭", command=self.close, width=8).pack(side="left", padx=3)
+        for text_label, cmd, kind in (
+            ("重排序号", self.renumber_now, "secondary"),
+            ("保存", lambda: self.save(quiet=False), "success"),
+            ("关闭", self.close, "secondary"),
+        ):
+            bg = Colors.SUCCESS if kind == "success" else Colors.BG_CARD
+            fg = Colors.TEXT_ON_PRIMARY if kind == "success" else Colors.TEXT_MAIN
+            abg = "#43A047" if kind == "success" else Colors.BG_HOVER
+            relief = "flat" if kind == "success" else "solid"
+            tk.Button(
+                action,
+                text=text_label,
+                command=cmd,
+                width=8,
+                bg=bg,
+                fg=fg,
+                activebackground=abg,
+                activeforeground=fg,
+                relief=relief,
+                bd=1 if kind == "secondary" else 0,
+                highlightbackground=Colors.BORDER if kind == "secondary" else bg,
+                highlightthickness=1 if kind == "secondary" else 0,
+                font=Fonts.body(),
+                padx=8,
+                pady=4,
+                cursor="hand2",
+            ).pack(side="left", padx=3)
 
         self.reload()
         text.focus_set()
-        text.mark_set(tk.INSERT, "end-1c")
-        text.see(tk.INSERT)
+        self._place_cursor_for_edit()
 
         win.update_idletasks()
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
@@ -262,8 +317,38 @@ class MemoPanel:
         self._text.edit_modified(False)
         self._loading = False
         if cursor_end:
+            self._place_cursor_for_edit()
+
+    def _place_cursor_for_edit(self) -> None:
+        """
+        光标放到「可直接打字」的位置：
+        优先第一个空的序号行（如「1. 」）的行末（「1. 」后面），
+        而不是它下面的空行。
+        """
+        if not self._text:
+            return
+        content = self._text.get("1.0", "end-1c")
+        lines = content.splitlines()
+        target_line: int | None = None
+        target_col = 0
+        # 1) 第一个内容为空的「N. 」行 → 光标在「N. 」后
+        for i, line in enumerate(lines, start=1):
+            m = _NUMBERED_RE.match(line)
+            if m and not (m.group(3) or "").strip():
+                target_line = i
+                target_col = len(line)
+                break
+        # 2) 否则最后一个序号行的行末
+        if target_line is None:
+            for i, line in enumerate(lines, start=1):
+                if _NUMBERED_RE.match(line):
+                    target_line = i
+                    target_col = len(line)
+        if target_line is not None:
+            self._text.mark_set(tk.INSERT, f"{target_line}.{target_col}")
+        else:
             self._text.mark_set(tk.INSERT, "end-1c")
-            self._text.see(tk.INSERT)
+        self._text.see(tk.INSERT)
 
     def reload(self) -> None:
         if not self._text:
@@ -276,6 +361,7 @@ class MemoPanel:
             body = renumber_list_items(body)
         self._path_var.set(str(path))
         self._set_body(body)
+        self._place_cursor_for_edit()
         self._dirty = False
         self._status_var.set("已加载 · 点击白板直接编辑 · 改动会记入历史版本")
         if self.win and self.win.winfo_exists():
@@ -428,8 +514,10 @@ class MemoPanel:
             self._refresh_history_list()
             return
 
+        configure_ttk_styles()
         parent = self.win or self.app.root
         hw = tk.Toplevel(parent)
+        apply_window_bg(hw)
         hw.title("备忘录历史版本")
         hw.attributes("-topmost", True)
         hw.geometry("640x480")
@@ -441,64 +529,113 @@ class MemoPanel:
         hw.columnconfigure(1, weight=2)
         hw.rowconfigure(1, weight=1)
 
-        header = ttk.Frame(hw, padding=(10, 10, 10, 4))
-        header.grid(row=0, column=0, columnspan=2, sticky="ew")
+        header = tk.Frame(hw, bg=Colors.BG_WINDOW)
+        header.grid(row=0, column=0, columnspan=2, sticky="ew", padx=14, pady=(12, 6))
         header.columnconfigure(0, weight=1)
-        ttk.Label(
+        tk.Label(
             header,
             text="类似 GitHub 的增删记录 · 选中版本可预览并恢复（防误删）",
-            font=("Microsoft YaHei UI", 9),
+            font=Fonts.body(),
+            bg=Colors.BG_WINDOW,
+            fg=Colors.TEXT_SECONDARY,
         ).grid(row=0, column=0, sticky="w")
-        ttk.Button(
-            header,
-            text="打开历史文件夹",
-            command=self.open_history_folder,
-            width=14,
-        ).grid(row=0, column=1, sticky="e", padx=(8, 0))
-        ttk.Button(
-            header,
-            text="打开笔记文件夹",
-            command=self.open_memo_folder,
-            width=14,
-        ).grid(row=0, column=2, sticky="e", padx=(4, 0))
+        for text, cmd, w in (
+            ("打开历史文件夹", self.open_history_folder, 14),
+            ("打开笔记文件夹", self.open_memo_folder, 14),
+        ):
+            tk.Button(
+                header,
+                text=text,
+                command=cmd,
+                width=w,
+                bg=Colors.BG_CARD,
+                fg=Colors.TEXT_MAIN,
+                activebackground=Colors.BG_HOVER,
+                activeforeground=Colors.TEXT_MAIN,
+                relief="solid",
+                bd=1,
+                highlightbackground=Colors.BORDER,
+                highlightthickness=1,
+                font=Fonts.body(),
+                cursor="hand2",
+            ).grid(row=0, column=1 if text == "打开历史文件夹" else 2, sticky="e", padx=(8 if text == "打开历史文件夹" else 4, 0))
 
-        left = ttk.Frame(hw, padding=(10, 0, 6, 10))
-        left.grid(row=1, column=0, sticky="nsew")
+        left = tk.Frame(hw, bg=Colors.BG_WINDOW)
+        left.grid(row=1, column=0, sticky="nsew", padx=(14, 6), pady=(0, 14))
         left.rowconfigure(0, weight=1)
         left.columnconfigure(0, weight=1)
         scroll_l = ttk.Scrollbar(left)
-        lb = tk.Listbox(left, font=("Consolas", 9), yscrollcommand=scroll_l.set, exportselection=False)
+        lb = tk.Listbox(
+            left,
+            font=Fonts.mono(size=9),
+            yscrollcommand=scroll_l.set,
+            exportselection=False,
+            bg=Colors.BG_CARD,
+            fg=Colors.TEXT_MAIN,
+            selectbackground=Colors.PRIMARY,
+            selectforeground=Colors.TEXT_ON_PRIMARY,
+            relief="solid",
+            bd=1,
+        )
         scroll_l.config(command=lb.yview)
         lb.grid(row=0, column=0, sticky="nsew")
         scroll_l.grid(row=0, column=1, sticky="ns")
         lb.bind("<<ListboxSelect>>", self._on_history_select)
         self._hist_list = lb
 
-        right = ttk.Frame(hw, padding=(6, 0, 10, 10))
-        right.grid(row=1, column=1, sticky="nsew")
+        right = tk.Frame(hw, bg=Colors.BG_WINDOW)
+        right.grid(row=1, column=1, sticky="nsew", padx=(6, 14), pady=(0, 14))
         right.rowconfigure(0, weight=1)
         right.columnconfigure(0, weight=1)
         scroll_r = ttk.Scrollbar(right)
         detail = tk.Text(
             right,
             wrap="word",
-            font=("Microsoft YaHei UI", 10),
-            bg="#F7F9FC",
+            font=Fonts.body(),
+            bg=Colors.BG_CARD,
+            fg=Colors.TEXT_MAIN,
             yscrollcommand=scroll_r.set,
             state="disabled",
+            relief="solid",
+            bd=1,
+            padx=10,
+            pady=10,
         )
         scroll_r.config(command=detail.yview)
         detail.grid(row=0, column=0, sticky="nsew")
         scroll_r.grid(row=0, column=1, sticky="ns")
         self._hist_detail = detail
 
-        bar = ttk.Frame(hw, padding=10)
-        bar.grid(row=2, column=0, columnspan=2, sticky="ew")
-        ttk.Button(bar, text="恢复此版本", command=self._restore_selected).pack(side="left", padx=4)
-        ttk.Button(bar, text="刷新列表", command=self._refresh_history_list).pack(side="left", padx=4)
-        ttk.Button(bar, text="打开历史文件夹", command=self.open_history_folder).pack(side="left", padx=4)
-        ttk.Button(bar, text="打开笔记文件夹", command=self.open_memo_folder).pack(side="left", padx=4)
-        ttk.Button(bar, text="关闭", command=self._close_history).pack(side="right", padx=4)
+        bar = tk.Frame(hw, bg=Colors.BG_WINDOW)
+        bar.grid(row=2, column=0, columnspan=2, sticky="ew", padx=14, pady=(0, 14))
+        for text, cmd, kind in (
+            ("恢复此版本", self._restore_selected, "primary"),
+            ("刷新列表", self._refresh_history_list, "secondary"),
+            ("打开历史文件夹", self.open_history_folder, "secondary"),
+            ("打开笔记文件夹", self.open_memo_folder, "secondary"),
+            ("关闭", self._close_history, "secondary"),
+        ):
+            bg = Colors.PRIMARY if kind == "primary" else Colors.BG_CARD
+            fg = Colors.TEXT_ON_PRIMARY if kind == "primary" else Colors.TEXT_MAIN
+            abg = Colors.PRIMARY_DARK if kind == "primary" else Colors.BG_HOVER
+            relief = "flat" if kind == "primary" else "solid"
+            tk.Button(
+                bar,
+                text=text,
+                command=cmd,
+                bg=bg,
+                fg=fg,
+                activebackground=abg,
+                activeforeground=fg,
+                relief=relief,
+                bd=1 if kind == "secondary" else 0,
+                highlightbackground=Colors.BORDER if kind == "secondary" else bg,
+                highlightthickness=1 if kind == "secondary" else 0,
+                font=Fonts.body(),
+                padx=10,
+                pady=4,
+                cursor="hand2",
+            ).pack(side="left" if kind != "secondary" or text != "关闭" else "right", padx=4)
 
         self._refresh_history_list()
         hw.update_idletasks()

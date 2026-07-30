@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -11,6 +11,7 @@ from tkinter import filedialog, messagebox, ttk
 import sys
 
 from data.settings import default_memo_dir
+from ui.theme import Colors, Fonts, apply_window_bg, configure_ttk_styles
 from utils import autostart
 from utils.updater import (
     BUILTIN_GH_PROXIES,
@@ -23,6 +24,32 @@ from utils.updater import (
 
 def sys_platform_is_win() -> bool:
     return sys.platform.startswith("win")
+
+
+def _secondary_btn(
+    parent: tk.Widget,
+    text: str,
+    command: Callable[[], None] | None = None,
+    width: int | None = None,
+) -> tk.Button:
+    """带边框的次要按钮，避免与窗口底色融为一体。"""
+    return tk.Button(
+        parent,
+        text=text,
+        command=command,
+        width=width,
+        bg=Colors.BG_CARD,
+        fg=Colors.TEXT_MAIN,
+        activebackground=Colors.BG_HOVER,
+        activeforeground=Colors.TEXT_MAIN,
+        relief="solid",
+        bd=1,
+        highlightbackground=Colors.BORDER,
+        highlightthickness=1,
+        font=Fonts.body(),
+        cursor="hand2",
+    )
+
 
 if TYPE_CHECKING:
     from app import DesktopPetApp
@@ -50,26 +77,35 @@ class SettingsPanel:
             self._load_fields()
             return
 
+        configure_ttk_styles()
         win = tk.Toplevel(self.app.root)
+        apply_window_bg(win)
         win.title("主设置")
         win.attributes("-topmost", True)
-        win.minsize(520, 520)
+        win.minsize(600, 520)
         win.resizable(True, True)
         win.protocol("WM_DELETE_WINDOW", self.close)
         self.win = win
 
         # 可滚动主区域
-        canvas = tk.Canvas(win, highlightthickness=0)
+        canvas = tk.Canvas(win, highlightthickness=0, bg=Colors.BG_WINDOW)
         scroll = ttk.Scrollbar(win, orient="vertical", command=canvas.yview)
-        frame = ttk.Frame(canvas, padding=14)
+        frame = tk.Frame(canvas, bg=Colors.BG_WINDOW, padx=14, pady=14)
         frame.bind(
             "<Configure>",
             lambda _e: canvas.configure(scrollregion=canvas.bbox("all")),
         )
-        canvas.create_window((0, 0), window=frame, anchor="nw")
+        self._frame_window = canvas.create_window(
+            (0, 0), window=frame, anchor="nw", width=canvas.winfo_width()
+        )
         canvas.configure(yscrollcommand=scroll.set)
         canvas.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
+
+        def _on_canvas_configure(event: tk.Event) -> None:
+            canvas.itemconfigure(self._frame_window, width=event.width)
+
+        canvas.bind("<Configure>", _on_canvas_configure)
 
         def _on_mousewheel(event: tk.Event) -> None:
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -77,17 +113,21 @@ class SettingsPanel:
         canvas.bind_all("<MouseWheel>", _on_mousewheel)
         win.bind("<Destroy>", lambda _e: canvas.unbind_all("<MouseWheel>"), add="+")
 
-        ttk.Label(
+        tk.Label(
             frame,
             text="主设置",
-            font=("Microsoft YaHei UI", 12, "bold"),
+            font=Fonts.title(),
+            bg=Colors.BG_WINDOW,
+            fg=Colors.TEXT_MAIN,
         ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
 
         char = self.app.character
-        ttk.Label(
+        tk.Label(
             frame,
             text=f"当前角色：{char.name}（{char.id}）",
-            foreground="#1565C0",
+            fg=Colors.PRIMARY,
+            bg=Colors.BG_WINDOW,
+            font=Fonts.body(bold=True),
         ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(0, 8))
 
         # ---- 备忘录目录 ----
@@ -105,8 +145,10 @@ class SettingsPanel:
         ttk.Entry(box, textvariable=self._path_var, width=48).grid(
             row=1, column=0, columnspan=2, sticky="ew", padx=(0, 6)
         )
-        ttk.Button(box, text="浏览…", command=self._browse, width=8).grid(row=1, column=2, sticky="e")
-        ttk.Button(box, text="恢复默认目录", command=self._reset_default).grid(
+        _secondary_btn(box, text="浏览…", command=self._browse, width=8).grid(
+            row=1, column=2, sticky="e"
+        )
+        _secondary_btn(box, text="恢复默认目录", command=self._reset_default).grid(
             row=2, column=0, sticky="w", pady=(8, 0)
         )
 
@@ -129,12 +171,27 @@ class SettingsPanel:
             wraplength=460,
             justify="left",
         ).grid(row=1, column=0, sticky="w", pady=(4, 8))
-        ttk.Button(
-            gen,
+        btn_launch = ttk.Frame(gen)
+        btn_launch.grid(row=2, column=0, sticky="w")
+        _secondary_btn(
+            btn_launch,
+            text="创建桌面快捷方式",
+            command=self._create_desktop_shortcut,
+            width=16,
+        ).pack(side="left", padx=(0, 8))
+        tk.Button(
+            btn_launch,
             text="退出桌宠",
             command=self._quit_app,
             width=14,
-        ).grid(row=2, column=0, sticky="w")
+            bg=Colors.DANGER,
+            fg=Colors.TEXT_ON_PRIMARY,
+            activebackground="#D32F2F",
+            activeforeground=Colors.TEXT_ON_PRIMARY,
+            relief="flat",
+            font=Fonts.body(),
+            cursor="hand2",
+        ).pack(side="left")
 
         # ---- 软件更新 ----
         upd = ttk.LabelFrame(frame, text="软件更新（GitHub）", padding=10)
@@ -190,13 +247,23 @@ class SettingsPanel:
 
         btn_row = ttk.Frame(upd)
         btn_row.grid(row=9, column=0, columnspan=3, sticky="w", pady=4)
-        ttk.Button(btn_row, text="检查更新", command=self._check_update, width=12).pack(
+        _secondary_btn(btn_row, text="检查更新", command=self._check_update, width=12).pack(
             side="left", padx=3
         )
-        ttk.Button(btn_row, text="立即更新", command=self._do_update, width=12).pack(
-            side="left", padx=3
-        )
-        ttk.Button(btn_row, text="打开仓库页", command=self._open_repo_page, width=12).pack(
+        tk.Button(
+            btn_row,
+            text="立即更新",
+            command=self._do_update,
+            width=12,
+            bg=Colors.PRIMARY,
+            fg=Colors.TEXT_ON_PRIMARY,
+            activebackground=Colors.PRIMARY_DARK,
+            activeforeground=Colors.TEXT_ON_PRIMARY,
+            relief="flat",
+            font=Fonts.body(bold=True),
+            cursor="hand2",
+        ).pack(side="left", padx=3)
+        _secondary_btn(btn_row, text="打开仓库页", command=self._open_repo_page, width=12).pack(
             side="left", padx=3
         )
 
@@ -216,7 +283,7 @@ class SettingsPanel:
 
         setup_row = ttk.Frame(frame)
         setup_row.grid(row=6, column=0, columnspan=3, sticky="w", pady=(4, 0))
-        ttk.Button(
+        _secondary_btn(
             setup_row,
             text="重新运行安装/路径向导…",
             command=self._rerun_setup,
@@ -225,15 +292,27 @@ class SettingsPanel:
 
         btns = ttk.Frame(frame)
         btns.grid(row=7, column=0, columnspan=3, sticky="e", pady=(12, 0))
-        ttk.Button(btns, text="保存设置", command=self._save, width=12).pack(side="left", padx=4)
-        ttk.Button(btns, text="关闭", command=self.close, width=10).pack(side="left", padx=4)
+        tk.Button(
+            btns,
+            text="保存设置",
+            command=self._save,
+            width=12,
+            bg=Colors.PRIMARY,
+            fg=Colors.TEXT_ON_PRIMARY,
+            activebackground=Colors.PRIMARY_DARK,
+            activeforeground=Colors.TEXT_ON_PRIMARY,
+            relief="flat",
+            font=Fonts.body(bold=True),
+            cursor="hand2",
+        ).pack(side="left", padx=4)
+        _secondary_btn(btns, text="关闭", command=self.close, width=10).pack(side="left", padx=4)
 
         self._load_fields()
         self._update_status.set("就绪")
 
         win.update_idletasks()
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-        ww, wh = 560, 640
+        ww, wh = 640, 640
         win.geometry(f"{ww}x{wh}+{(sw - ww) // 2}+{(sh - wh) // 2}")
 
     def _proxy_choices(self) -> list[str]:
@@ -366,6 +445,51 @@ class SettingsPanel:
 
     def _quit_app(self) -> None:
         self.app.quit_app(confirm=True)
+
+    def _create_desktop_shortcut(self) -> None:
+        """在桌面创建/覆盖「Desktop Pet」快捷方式。"""
+        from utils.install_util import (
+            create_windows_shortcut,
+            desktop_dir,
+            find_app_source,
+            find_main_exe,
+        )
+
+        src = find_app_source()
+        target = find_main_exe(src)
+        if target is None or not target.exists():
+            messagebox.showerror(
+                "桌面快捷方式",
+                f"找不到可启动的程序：\n{src}",
+                parent=self.win,
+            )
+            return
+
+        # 开发模式：快捷方式指向 python + main.py
+        sc_path = desktop_dir() / "Desktop Pet.lnk"
+        if target.suffix.lower() == ".exe":
+            ok = create_windows_shortcut(target, sc_path, workdir=target.parent)
+        else:
+            # main.py → 用当前解释器
+            ok = autostart._create_shortcut_with_args(  # noqa: SLF001
+                sc_path,
+                Path(sys.executable).resolve(),
+                target.parent,
+                [str(target.resolve())],
+            )
+
+        if ok:
+            messagebox.showinfo(
+                "桌面快捷方式",
+                f"已创建：\n{sc_path}\n\n目标：\n{target}",
+                parent=self.win,
+            )
+        else:
+            messagebox.showerror(
+                "桌面快捷方式",
+                "创建失败。可手动把 DesktopPet.exe 发送到桌面快捷方式。",
+                parent=self.win,
+            )
 
     def _proxy_chain(self) -> list[str]:
         return proxy_chain_from_settings(

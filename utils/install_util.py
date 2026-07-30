@@ -122,7 +122,47 @@ def write_initial_settings(
     return settings_path
 
 
-def create_windows_shortcut(target_exe: Path, shortcut_path: Path, workdir: Path | None = None) -> bool:
+def find_app_icon(base: Path | None = None) -> Path | None:
+    """查找 Kiki / 应用图标（优先 .ico）。"""
+    roots: list[Path] = []
+    if base is not None:
+        roots.append(Path(base))
+    try:
+        roots.append(find_app_source())
+    except Exception:
+        pass
+    # 去重并保持顺序
+    seen: set[str] = set()
+    candidates: list[Path] = []
+    for root in roots:
+        root = root.resolve()
+        key = str(root).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.extend(
+            [
+                root / "app.ico",
+                root / "characters" / "kiki" / "assets" / "preview.png",
+                root / "characters" / "kiki" / "assets" / "idle.png",
+                root / "_internal" / "app.ico",
+                root / "_internal" / "characters" / "kiki" / "assets" / "preview.png",
+            ]
+        )
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
+def create_windows_shortcut(
+    target_exe: Path,
+    shortcut_path: Path,
+    workdir: Path | None = None,
+    *,
+    icon_path: Path | None = None,
+    description: str = "Desktop Pet — Kiki",
+) -> bool:
     """创建 .lnk 快捷方式（Windows）。失败返回 False。"""
     if not sys.platform.startswith("win"):
         return False
@@ -130,6 +170,8 @@ def create_windows_shortcut(target_exe: Path, shortcut_path: Path, workdir: Path
     workdir = (workdir or target_exe.parent).resolve()
     shortcut_path = shortcut_path.resolve()
     shortcut_path.parent.mkdir(parents=True, exist_ok=True)
+    icon = icon_path or find_app_icon(workdir) or find_app_icon(target_exe.parent)
+    icon_loc = f"{icon},0" if icon and icon.is_file() else f"{target_exe},0"
     try:
         # Prefer win32com if available
         try:
@@ -139,18 +181,24 @@ def create_windows_shortcut(target_exe: Path, shortcut_path: Path, workdir: Path
             sc = shell.CreateShortCut(str(shortcut_path))
             sc.Targetpath = str(target_exe)
             sc.WorkingDirectory = str(workdir)
-            sc.IconLocation = str(target_exe)
+            sc.IconLocation = icon_loc
+            sc.Description = description
             sc.save()
             return True
         except Exception:
             pass
         # Fallback: PowerShell
+        def _ps(s: str) -> str:
+            return s.replace("'", "''")
+
         ps = (
-            f'$ws = New-Object -ComObject WScript.Shell; '
-            f'$s = $ws.CreateShortcut("{shortcut_path}"); '
-            f'$s.TargetPath = "{target_exe}"; '
-            f'$s.WorkingDirectory = "{workdir}"; '
-            f'$s.Save()'
+            f"$ws = New-Object -ComObject WScript.Shell; "
+            f"$s = $ws.CreateShortcut('{_ps(str(shortcut_path))}'); "
+            f"$s.TargetPath = '{_ps(str(target_exe))}'; "
+            f"$s.WorkingDirectory = '{_ps(str(workdir))}'; "
+            f"$s.IconLocation = '{_ps(icon_loc)}'; "
+            f"$s.Description = '{_ps(description)}'; "
+            f"$s.Save()"
         )
         import subprocess
 
@@ -165,8 +213,39 @@ def create_windows_shortcut(target_exe: Path, shortcut_path: Path, workdir: Path
 
 
 def desktop_dir() -> Path:
+    """用户桌面目录（优先 shell 真实桌面，兼容 OneDrive）。"""
     if sys.platform.startswith("win"):
-        return Path(os.environ.get("USERPROFILE", str(Path.home()))) / "Desktop"
+        # 1) PowerShell 用户桌面（含 OneDrive 重定向）
+        try:
+            import subprocess
+
+            out = subprocess.check_output(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    "[Environment]::GetFolderPath('Desktop')",
+                ],
+                text=True,
+                stderr=subprocess.DEVNULL,
+                timeout=8,
+            ).strip()
+            if out:
+                p = Path(out)
+                if p.is_dir():
+                    return p
+        except Exception:
+            pass
+        # 2) 常见路径
+        home = Path(os.environ.get("USERPROFILE", str(Path.home())))
+        for candidate in (
+            home / "Desktop",
+            home / "OneDrive" / "Desktop",
+            home / "OneDrive" / "桌面",
+        ):
+            if candidate.is_dir():
+                return candidate
+        return home / "Desktop"
     return Path.home() / "Desktop"
 
 
