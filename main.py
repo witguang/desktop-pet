@@ -1,8 +1,25 @@
-"""桌宠入口。打包版会优先加载 exe 旁已更新的源码。"""
+"""桌宠入口。开发时从 src/ 加载；打包版优先加载 exe 旁已更新的源码。"""
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parent
+
+
+def _ensure_src_on_path() -> None:
+    """开发布局：业务代码在 src/，把其加入 import 路径。"""
+    if getattr(sys, "frozen", False):
+        return
+    src = _project_root() / "src"
+    if not src.is_dir():
+        return
+    src_s = str(src.resolve())
+    if src_s in sys.path:
+        sys.path.remove(src_s)
+    sys.path.insert(0, src_s)
 
 
 def _bootstrap_external_sources() -> None:
@@ -39,6 +56,7 @@ def _bootstrap_external_sources() -> None:
             del sys.modules[name]
 
 
+_ensure_src_on_path()
 _bootstrap_external_sources()
 
 from app import main  # noqa: E402

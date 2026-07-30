@@ -44,7 +44,7 @@ python main.py --list-characters
 
 ```bash
 # 或双击 打包给朋友.bat
-python build_app.py
+python packaging/build_app.py
 ```
 
 输出：
@@ -62,35 +62,43 @@ gh release create v1.1.6 dist/DesktopPet-v1.1.6-windows.zip --title "v1.1.6" --n
 
 ---
 
-## 目录怎么读（看起来乱？）
+## 目录结构（已收纳）
 
-源码树是给**改程序的人**看的，日常使用只关心 Releases 里的 zip。根目录文件大致分工：
+朋友只下载 Releases；开发时根目录尽量只留入口与资源：
 
 ```
 doraemon_pet/
 ├── 给朋友看.md / 启动桌宠.bat / 打包给朋友.bat   ← 实用入口
-├── main.py / app.py / config.py                  ← 程序入口与配置
+├── main.py / install_app.py                      ← 启动入口（薄）
+├── VERSION / requirements.txt / README.md
+│
 ├── characters/          ★ 角色包（换皮只改这里）
 │   ├── kiki/  doraemon/  _template/
-├── core/                引擎逻辑（番茄钟、状态机…）
-├── data/                设置 / 任务日志读写代码
-├── ui/                  窗口与面板
-├── utils/               更新、安装、素材加载
-├── data_store/          运行时用户数据（不进 Git）
-├── build_app.py/.bat    打包成 exe
-└── DesktopPet.spec      PyInstaller 配置
+│
+├── src/                 ★ 全部业务源码
+│   ├── app.py / config.py
+│   ├── core/            引擎（番茄钟、状态机…）
+│   ├── data/            设置 / 任务日志
+│   ├── ui/              窗口与面板
+│   └── utils/           更新、安装、素材加载
+│
+├── packaging/           ★ 打包工具（PyInstaller）
+│   ├── build_app.py / build_app.bat
+│   └── *.spec
+│
+└── data_store/          运行时用户数据（不进 Git）
 ```
 
 | 层 | 职责 |
 |----|------|
 | **角色包** `characters/*` | 外观、食物名、台词、UI 文案 |
-| **引擎** `core/` + `app.py` | 番茄钟、饥饿、喝水、状态机 |
-| **存储** `data/` | 任务日志、当前角色 id |
-| **UI** `ui/` | 渲染与交互，文案全部问角色包要 |
+| **引擎** `src/core/` + `src/app.py` | 番茄钟、饥饿、喝水、状态机 |
+| **存储** `src/data/` | 任务日志、当前角色 id |
+| **UI** `src/ui/` | 渲染与交互，文案全部问角色包要 |
 
 状态优先级：`时光机 > 吃东西 > 喝水 > 专注 > 饥饿 > 待机`
 
-开发用：重新生成内置角色占位图 → `python -m utils.pack_generator`
+开发用占位图：`python -c "import sys; sys.path.insert(0,'src'); from utils.pack_generator import generate_all; generate_all()"`
 
 ---
 

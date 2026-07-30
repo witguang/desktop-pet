@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-cd /d "%~dp0"
+cd /d "%~dp0\.."
 
 echo ========================================
 echo   Desktop Pet build (PyInstaller)
@@ -33,7 +33,7 @@ if errorlevel 1 (
 )
 
 echo [3/4] Building ...
-python build_app.py
+python packaging\build_app.py
 if errorlevel 1 (
   echo [ERROR] build failed
   pause
@@ -43,8 +43,7 @@ if errorlevel 1 (
 echo [4/4] Done
 echo.
 echo Output: dist\DesktopPet\DesktopPet.exe
-echo Share the whole dist\DesktopPet folder.
-echo User data: data_store next to the exe.
+echo Zip:    dist\DesktopPet-v*-windows.zip
 echo.
 pause
 exit /b 0

@@ -9,27 +9,33 @@ import sys
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# 路径（支持 PyInstaller 打包）
+# 路径（支持 PyInstaller 打包；开发时源码在 src/，资源与数据在项目根）
 # ---------------------------------------------------------------------------
-def _resolve_base_dir() -> Path:
+def project_root() -> Path:
+    """项目根目录：含 main.py / characters / data_store。"""
     if getattr(sys, "frozen", False):
-        # onedir: 可执行文件旁；onefile: 解压目录
-        meipass = getattr(sys, "_MEIPASS", None)
-        if meipass:
-            # onefile 资源在 _MEIPASS，用户数据放 exe 旁
-            return Path(sys.executable).resolve().parent
         return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent
+    here = Path(__file__).resolve().parent
+    # 标准布局：src/config.py → 上一级为项目根
+    if here.name == "src":
+        return here.parent
+    # 兼容：平铺布局（打包后 exe 旁热加载的 app 树）
+    return here
+
+
+def _resolve_base_dir() -> Path:
+    # 用户数据始终在 exe / 项目根旁，便于更新不丢
+    return project_root()
 
 
 def resource_dir() -> Path:
-    """只读资源目录（角色包、内置 assets）。"""
+    """只读资源目录（角色包等）。"""
     if getattr(sys, "frozen", False):
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
             return Path(meipass)
         return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent
+    return project_root()
 
 
 BASE_DIR = _resolve_base_dir()

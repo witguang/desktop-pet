@@ -32,10 +32,12 @@ build/
 dist/
 *.egg-info/
 app.ico
+packaging/app.ico
 DesktopPetSetup.spec
+packaging/DesktopPetSetup.spec
 
 # 维护者本地脚本（含 API 推送、一次性修复等，可能含账号/环境假设）
 scripts/
 
-# PyInstaller 自动生成的绝对路径 spec（保留仓库内可移植的 DesktopPet.spec / build_app.spec）
+# PyInstaller 自动生成的绝对路径 spec（保留 packaging/ 内可移植 spec）
 # 若本地再 pyi-makespec，勿提交带盘符的路径

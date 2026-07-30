@@ -250,10 +250,15 @@ def desktop_dir() -> Path:
 
 
 def find_app_source() -> Path:
-    """当前程序所在目录（打包后 = exe 旁）。"""
+    """当前程序所在目录（打包后 = exe 旁；开发 = 项目根）。"""
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent.parent
+    here = Path(__file__).resolve()
+    # src/utils/xxx.py → 项目根
+    if here.parent.name == "utils" and here.parent.parent.name == "src":
+        return here.parent.parent.parent
+    # 兼容：exe 旁平铺的 utils/
+    return here.parent.parent
 
 
 def find_main_exe(install_dir: Path) -> Path | None:

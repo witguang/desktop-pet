@@ -1,24 +1,26 @@
 # -*- mode: python ; coding: utf-8 -*-
-# 可移植 spec：使用 SPECPATH 作为根目录，避免写死绝对路径
+# 可移植 spec：SPECPATH = packaging/，项目根为上一级
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
 
-root = Path(SPECPATH)
+pkg = Path(SPECPATH)
+root = pkg.parent
+src = root / "src"
 
 datas = [
-    (str(root / 'characters'), 'characters'),
-    (str(root / 'assets'), 'assets'),
-    (str(root / 'VERSION'), '.'),
+    (str(root / "characters"), "characters"),
+    (str(root / "VERSION"), "."),
 ]
 binaries = []
-hiddenimports = ['PIL._tkinter_finder']
-tmp_ret = collect_all('PIL')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-
+hiddenimports = ["PIL._tkinter_finder"]
+tmp_ret = collect_all("PIL")
+datas += tmp_ret[0]
+binaries += tmp_ret[1]
+hiddenimports += tmp_ret[2]
 
 a = Analysis(
-    [str(root / 'main.py')],
-    pathex=[str(root)],
+    [str(root / "main.py")],
+    pathex=[str(src), str(root)],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
@@ -36,7 +38,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='DesktopPet',
+    name="DesktopPet",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -55,5 +57,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='DesktopPet',
+    name="DesktopPet",
 )

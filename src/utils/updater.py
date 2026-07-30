@@ -265,7 +265,12 @@ def resolve_relaunch_command() -> tuple[list[str], Path]:
         exe = Path(sys.executable).resolve()
         return [str(exe)], exe.parent
 
-    main_py = Path(__file__).resolve().parent.parent / "main.py"
+    here = Path(__file__).resolve()
+    if here.parent.name == "utils" and here.parent.parent.name == "src":
+        root = here.parent.parent.parent
+    else:
+        root = here.parent.parent
+    main_py = root / "main.py"
     if not main_py.is_file():
         main_py = BASE_DIR / "main.py"
     python = Path(sys.executable).resolve()

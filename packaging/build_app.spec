@@ -1,22 +1,23 @@
 # -*- mode: python ; coding: utf-8 -*-
-# 用法: pyinstaller --noconfirm build_app.spec
+# 用法: pyinstaller --noconfirm packaging/build_app.spec
+# SPECPATH = packaging/
 
-import sys
 from pathlib import Path
 
 block_cipher = None
-root = Path(SPECPATH)
+pkg = Path(SPECPATH)
+root = pkg.parent
+src = root / "src"
 
 a = Analysis(
-    ['main.py'],
-    pathex=[str(root)],
+    [str(root / "main.py")],
+    pathex=[str(src), str(root)],
     binaries=[],
     datas=[
-        (str(root / 'characters'), 'characters'),
-        (str(root / 'assets'), 'assets'),
-        (str(root / 'VERSION'), '.'),
+        (str(root / "characters"), "characters"),
+        (str(root / "VERSION"), "."),
     ],
-    hiddenimports=['PIL._tkinter_finder'],
+    hiddenimports=["PIL._tkinter_finder"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -33,7 +34,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='DesktopPet',
+    name="DesktopPet",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -44,6 +45,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    cipher=block_cipher,
 )
 coll = COLLECT(
     exe,
@@ -53,5 +55,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='DesktopPet',
+    name="DesktopPet",
 )

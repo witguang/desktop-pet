@@ -40,8 +40,13 @@ def resolve_launch_target() -> tuple[Path, Path, list[str]]:
         exe = Path(sys.executable).resolve()
         return exe, exe.parent, []
 
-    # 开发模式：用当前解释器启动 main.py
-    main_py = Path(__file__).resolve().parent.parent / "main.py"
+    # 开发模式：用当前解释器启动项目根 main.py
+    here = Path(__file__).resolve()
+    if here.parent.name == "utils" and here.parent.parent.name == "src":
+        root = here.parent.parent.parent
+    else:
+        root = here.parent.parent
+    main_py = root / "main.py"
     python = Path(sys.executable).resolve()
     return python, main_py.parent, [str(main_py)]
 

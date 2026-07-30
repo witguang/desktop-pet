@@ -2,9 +2,22 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+
+
+def _ensure_src_on_path() -> None:
+    if getattr(sys, "frozen", False):
+        return
+    src = Path(__file__).resolve().parent / "src"
+    if src.is_dir():
+        s = str(src.resolve())
+        if s in sys.path:
+            sys.path.remove(s)
+        sys.path.insert(0, s)
 
 
 def main() -> int:
+    _ensure_src_on_path()
     from ui.setup_wizard import SetupWizard
 
     ok = SetupWizard(mode="install").run()

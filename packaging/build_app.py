@@ -1,7 +1,8 @@
 """
 Cross-platform desktop pet packager.
-Run:  python build_app.py
-  or: build_app.bat
+Run from project root:
+  python packaging/build_app.py
+  or: 打包给朋友.bat / packaging/build_app.bat
 """
 from __future__ import annotations
 
@@ -10,7 +11,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+PKG_DIR = Path(__file__).resolve().parent
+ROOT = PKG_DIR.parent
+SRC = ROOT / "src"
 
 
 def run(cmd: list[str]) -> None:
@@ -21,6 +24,11 @@ def run(cmd: list[str]) -> None:
 def main() -> int:
     print(f"Python: {sys.executable}")
     print(f"Root:   {ROOT}")
+    print(f"Src:    {SRC}")
+
+    if not SRC.is_dir():
+        print("ERROR: missing src/ directory:", SRC)
+        return 1
 
     try:
         import PyInstaller  # noqa: F401
@@ -28,14 +36,13 @@ def main() -> int:
         print("Installing PyInstaller ...")
         run([sys.executable, "-m", "pip", "install", "-U", "pyinstaller"])
 
-    # Clean previous build output (keep script simple)
+    # Clean previous build output at project root
     for name in ("build", "dist"):
         p = ROOT / name
         if p.exists():
             print(f"Removing {p} ...")
             shutil.rmtree(p, ignore_errors=True)
 
-    # 确保 Kiki 应用图标存在（快捷方式 + exe 图标）
     icon_path = _ensure_app_icon()
 
     # Windows uses ";" in --add-data; other OS use ":"
@@ -53,11 +60,19 @@ def main() -> int:
         "--clean",
         "--windowed",
         "--paths",
+        str(SRC),
+        "--paths",
         str(ROOT),
         "--hidden-import",
         "PIL._tkinter_finder",
         "--collect-all",
         "PIL",
+        "--distpath",
+        str(ROOT / "dist"),
+        "--workpath",
+        str(ROOT / "build"),
+        "--specpath",
+        str(PKG_DIR),
     ]
     for item in add_data:
         common.extend(["--add-data", item])
@@ -67,7 +82,7 @@ def main() -> int:
     # Main app
     run(common + ["--name", "DesktopPet", str(ROOT / "main.py")])
 
-    # Installer (separate small entry — shares same datas)
+    # Installer
     run(
         common
         + [
@@ -77,14 +92,12 @@ def main() -> int:
         ]
     )
 
-    # Merge installer exe into main dist folder for one-folder distribution
     main_dir = ROOT / "dist" / "DesktopPet"
     setup_dir = ROOT / "dist" / "DesktopPetSetup"
     setup_exe = setup_dir / "DesktopPetSetup.exe"
     if main_dir.exists() and setup_exe.exists():
         shutil.copy2(setup_exe, main_dir / "DesktopPetSetup.exe")
         print("Copied DesktopPetSetup.exe into dist/DesktopPet/")
-        # optional: remove separate setup dist to avoid confusion
         shutil.rmtree(setup_dir, ignore_errors=True)
 
     exe = main_dir / "DesktopPet.exe"
@@ -92,14 +105,12 @@ def main() -> int:
         print("ERROR: build finished but exe not found:", exe)
         return 1
 
-    # 把业务源码拷到 exe 旁，供 GitHub 源码更新 + external_source 热加载
+    # 业务源码平铺到 exe 旁（热更新 / external_source 约定）
     _copy_sources_beside_exe(main_dir)
 
-    # 根目录再放一份 app.ico，便于快捷方式 IconLocation
     if icon_path is not None and icon_path.is_file():
         shutil.copy2(icon_path, main_dir / "app.ico")
 
-    # 给朋友一键分发的 zip（整包，解压即用）
     zip_path = _make_friend_zip(main_dir)
 
     print("OK:", exe)
@@ -119,8 +130,8 @@ def main() -> int:
 
 
 def _ensure_app_icon() -> Path | None:
-    """从 Kiki preview/idle 生成 app.ico（若不存在或过旧则重建）。"""
-    out = ROOT / "app.ico"
+    """从 Kiki preview/idle 生成 packaging/app.ico。"""
+    out = PKG_DIR / "app.ico"
     sources = [
         ROOT / "characters" / "kiki" / "assets" / "preview.png",
         ROOT / "characters" / "kiki" / "assets" / "idle.png",
@@ -154,30 +165,47 @@ def _ensure_app_icon() -> Path | None:
 
 
 def _copy_sources_beside_exe(main_dir: Path) -> None:
-    """Copy pure-Python app tree next to DesktopPet.exe for in-place updates."""
-    patterns = [
+    """
+    把可热更新的业务树平铺到 exe 旁（不保留 src/ 前缀）。
+    external_source 约定：exe 旁有 app.py / utils/ 等。
+    """
+    root_files = [
         "main.py",
-        "app.py",
-        "config.py",
+        "install_app.py",
         "VERSION",
         "requirements.txt",
         "README.md",
         "给朋友看.md",
         ".gitignore",
-        "DesktopPet.spec",
-        "build_app.py",
-        "build_app.bat",
-        "install_app.py",
-        "app.ico",
     ]
-    dirs = ["core", "data", "ui", "utils", "characters"]
-    for name in patterns:
+    src_files = ["app.py", "config.py"]
+    src_dirs = ["core", "data", "ui", "utils"]
+    root_dirs = ["characters"]
+
+    for name in root_files:
         src = ROOT / name
         if src.is_file():
-            dest = main_dir / name
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dest)
-    for d in dirs:
+            shutil.copy2(src, main_dir / name)
+
+    for name in src_files:
+        src = SRC / name
+        if src.is_file():
+            shutil.copy2(src, main_dir / name)
+
+    for d in src_dirs:
+        src = SRC / d
+        dst = main_dir / d
+        if not src.is_dir():
+            continue
+        if dst.exists():
+            shutil.rmtree(dst, ignore_errors=True)
+        shutil.copytree(
+            src,
+            dst,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".memo_history"),
+        )
+
+    for d in root_dirs:
         src = ROOT / d
         dst = main_dir / d
         if not src.is_dir():
@@ -189,7 +217,17 @@ def _copy_sources_beside_exe(main_dir: Path) -> None:
             dst,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".memo_history"),
         )
-    # 分发包内放一份极简说明，避免朋友打开一堆源码发懵
+
+    # packaging 工具可选拷贝，方便有源码的用户二次打包
+    pack_dst = main_dir / "packaging"
+    if pack_dst.exists():
+        shutil.rmtree(pack_dst, ignore_errors=True)
+    pack_dst.mkdir(parents=True, exist_ok=True)
+    for name in ("build_app.py", "build_app.bat", "DesktopPet.spec", "build_app.spec"):
+        src = PKG_DIR / name
+        if src.is_file():
+            shutil.copy2(src, pack_dst / name)
+
     readme_friend = main_dir / "【先读我】安装说明.txt"
     readme_friend.write_text(
         "\n".join(
@@ -232,10 +270,8 @@ def _make_friend_zip(main_dir: Path) -> Path | None:
     out = ROOT / "dist" / f"DesktopPet-v{version}-windows.zip"
     if out.exists():
         out.unlink()
-    # zip 内顶层目录名固定，方便解压后找到
     base_name = str(ROOT / "dist" / f"DesktopPet-v{version}")
     archive = shutil.make_archive(base_name, "zip", root_dir=main_dir.parent, base_dir=main_dir.name)
-    # make_archive 生成 DesktopPet-vX.zip，与目标名对齐
     generated = Path(archive)
     if generated.resolve() != out.resolve():
         if out.exists():
