@@ -1,13 +1,12 @@
 """首次启动 / 安装向导：选择安装位置与备忘录目录。"""
 from __future__ import annotations
 
-import sys
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox
 from typing import Callable
 
-from ui.theme import Colors, Fonts, apply_window_bg, configure_ttk_styles
+from ui.theme import Colors, Fonts, apply_window_bg, configure_ttk_styles, entry_kwargs
 from utils.install_util import (
     copy_app_tree,
     create_windows_shortcut,
@@ -47,13 +46,17 @@ class SetupWizard:
         self._root: tk.Tk | None = None
 
     def run(self) -> bool:
-        configure_ttk_styles()
+        # 必须先创建根窗口，再配置 ttk，否则 ttk.Style() 会生成空白幽灵窗
         root = tk.Tk()
         apply_window_bg(root)
+        configure_ttk_styles(root)
         self._root = root
         root.title("Desktop Pet 安装向导" if self.mode == "install" else "Desktop Pet 初始设置")
         root.resizable(False, False)
-        root.attributes("-topmost", True)
+        try:
+            root.attributes("-topmost", True)
+        except tk.TclError:
+            pass
 
         install_var = tk.StringVar(value=str(self.install_dir))
         memo_var = tk.StringVar(value=str(self.memo_dir))
@@ -62,6 +65,8 @@ class SetupWizard:
 
         frame = tk.Frame(root, bg=Colors.BG_WINDOW, padx=20, pady=20)
         frame.grid(row=0, column=0, sticky="nsew")
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(0, weight=1)
 
         title = "安装向导" if self.mode == "install" else "欢迎使用桌面宠物"
         tk.Label(
@@ -93,21 +98,18 @@ class SetupWizard:
         )
         box.grid(row=row, column=0, columnspan=3, sticky="ew", pady=6)
         box.columnconfigure(0, weight=1)
-        tk.Entry(
+        install_entry = tk.Entry(
             box,
             textvariable=install_var,
             width=52,
-            bg=Colors.BG_INPUT,
-            fg=Colors.TEXT_MAIN,
-            relief="solid",
-            bd=1,
-            font=Fonts.body(),
-        ).grid(row=0, column=0, sticky="ew", padx=(0, 8))
+            **entry_kwargs(),
+        )
+        install_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
         tk.Button(
             box,
             text="浏览…",
             width=8,
-            command=lambda: self._browse_dir(install_var, "选择安装文件夹"),
+            command=lambda: self._browse_dir(root, install_var, install_entry, "选择安装文件夹"),
             bg=Colors.PRIMARY,
             fg=Colors.TEXT_ON_PRIMARY,
             activebackground=Colors.PRIMARY_DARK,
@@ -143,21 +145,18 @@ class SetupWizard:
         )
         memo_box.grid(row=row, column=0, columnspan=3, sticky="ew", pady=6)
         memo_box.columnconfigure(0, weight=1)
-        tk.Entry(
+        memo_entry = tk.Entry(
             memo_box,
             textvariable=memo_var,
             width=52,
-            bg=Colors.BG_INPUT,
-            fg=Colors.TEXT_MAIN,
-            relief="solid",
-            bd=1,
-            font=Fonts.body(),
-        ).grid(row=0, column=0, sticky="ew", padx=(0, 8))
+            **entry_kwargs(),
+        )
+        memo_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
         tk.Button(
             memo_box,
             text="浏览…",
             width=8,
-            command=lambda: self._browse_dir(memo_var, "选择备忘录文件夹"),
+            command=lambda: self._browse_dir(root, memo_var, memo_entry, "选择备忘录文件夹"),
             bg=Colors.PRIMARY,
             fg=Colors.TEXT_ON_PRIMARY,
             activebackground=Colors.PRIMARY_DARK,
@@ -189,9 +188,13 @@ class SetupWizard:
         cb.grid(row=row, column=0, columnspan=3, sticky="w", pady=(12, 4))
         row += 1
 
-        tk.Label(frame, textvariable=status_var, fg=Colors.PRIMARY, bg=Colors.BG_WINDOW, font=Fonts.body()).grid(
-            row=row, column=0, columnspan=3, sticky="w", pady=6
-        )
+        tk.Label(
+            frame,
+            textvariable=status_var,
+            fg=Colors.PRIMARY,
+            bg=Colors.BG_WINDOW,
+            font=Fonts.body(),
+        ).grid(row=row, column=0, columnspan=3, sticky="w", pady=6)
         row += 1
 
         btns = tk.Frame(frame, bg=Colors.BG_WINDOW)
@@ -200,36 +203,6 @@ class SetupWizard:
         def do_cancel() -> None:
             self.result_ok = False
             root.destroy()
-
-        tk.Button(
-            btns,
-            text="取消",
-            command=do_cancel,
-            width=10,
-            bg=Colors.BG_CARD,
-            fg=Colors.TEXT_MAIN,
-            activebackground=Colors.BG_HOVER,
-            activeforeground=Colors.TEXT_MAIN,
-            relief="solid",
-            bd=1,
-            highlightbackground=Colors.BORDER,
-            highlightthickness=1,
-            font=Fonts.body(),
-            cursor="hand2",
-        ).pack(side="left", padx=4)
-        tk.Button(
-            btns,
-            text="安装并完成" if self.mode == "install" else "完成并启动",
-            command=do_finish,
-            width=14,
-            bg=Colors.PRIMARY,
-            fg=Colors.TEXT_ON_PRIMARY,
-            activebackground=Colors.PRIMARY_DARK,
-            activeforeground=Colors.TEXT_ON_PRIMARY,
-            relief="flat",
-            font=Fonts.body(bold=True),
-            cursor="hand2",
-        ).pack(side="left", padx=4)
 
         def do_finish() -> None:
             install_path = Path(install_var.get().strip()).expanduser()
@@ -302,26 +275,72 @@ class SetupWizard:
             messagebox.showinfo("完成", msg, parent=root)
             root.destroy()
 
+        tk.Button(
+            btns,
+            text="取消",
+            command=do_cancel,
+            width=10,
+            bg=Colors.BG_CARD,
+            fg=Colors.TEXT_MAIN,
+            activebackground=Colors.BG_HOVER,
+            activeforeground=Colors.TEXT_MAIN,
+            relief="solid",
+            bd=1,
+            highlightbackground=Colors.BORDER,
+            highlightthickness=1,
+            font=Fonts.body(),
+            cursor="hand2",
+        ).pack(side="left", padx=4)
+        tk.Button(
+            btns,
+            text="安装并完成" if self.mode == "install" else "完成并启动",
+            command=do_finish,
+            width=14,
+            bg=Colors.PRIMARY,
+            fg=Colors.TEXT_ON_PRIMARY,
+            activebackground=Colors.PRIMARY_DARK,
+            activeforeground=Colors.TEXT_ON_PRIMARY,
+            relief="flat",
+            font=Fonts.body(bold=True),
+            cursor="hand2",
+        ).pack(side="left", padx=4)
 
-
-        # center
+        # 居中（带合理最小尺寸，避免空白小窗感）
         root.update_idletasks()
-        w, h = root.winfo_reqwidth(), root.winfo_reqheight()
+        w = max(root.winfo_reqwidth(), 520)
+        h = max(root.winfo_reqheight(), 360)
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        root.geometry(f"+{(sw - w) // 2}+{(sh - h) // 2}")
+        root.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
+        root.minsize(480, 320)
         root.mainloop()
         self._root = None
         return self.result_ok
 
     @staticmethod
-    def _browse_dir(var: tk.StringVar, title: str) -> None:
+    def _browse_dir(
+        parent: tk.Tk,
+        var: tk.StringVar,
+        entry: tk.Entry,
+        title: str,
+    ) -> None:
         initial = var.get().strip() or str(Path.home())
         p = Path(initial)
         if not p.is_dir():
             p = Path.home()
-        chosen = filedialog.askdirectory(title=title, initialdir=str(p))
+        chosen = filedialog.askdirectory(
+            parent=parent,
+            title=title,
+            initialdir=str(p),
+        )
         if chosen:
             var.set(chosen)
+            # 选完目录后 Windows 可能把 Entry 前景改成系统白字，强制恢复可读配色
+            try:
+                entry.configure(**entry_kwargs())
+                entry.icursor("end")
+                entry.xview_moveto(1.0)
+            except tk.TclError:
+                pass
 
 
 def needs_setup() -> bool:

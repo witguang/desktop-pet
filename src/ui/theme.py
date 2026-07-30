@@ -78,10 +78,38 @@ class Spacing:
     PAD_XL = 16
 
 
+def entry_kwargs(**overrides) -> dict:
+    """
+    经典 tk.Entry 的可读配色（Windows 深色模式下也保持深字浅底）。
+    未设 insertbackground / selectforeground 时，选目录后常出现白字看不见。
+    """
+    cfg = {
+        "bg": Colors.BG_INPUT,
+        "fg": Colors.TEXT_MAIN,
+        "insertbackground": Colors.TEXT_MAIN,
+        "selectbackground": Colors.PRIMARY,
+        "selectforeground": Colors.TEXT_ON_PRIMARY,
+        "disabledbackground": Colors.BG_INPUT,
+        "disabledforeground": Colors.TEXT_SECONDARY,
+        "relief": "solid",
+        "bd": 1,
+        "font": Fonts.body(),
+        "highlightthickness": 1,
+        "highlightbackground": Colors.BORDER,
+        "highlightcolor": Colors.PRIMARY,
+    }
+    cfg.update(overrides)
+    return cfg
+
+
 # ttk 样式统一入口
-def configure_ttk_styles() -> None:
-    """配置全局 ttk 样式，使按钮、输入框、标签框架风格一致。"""
-    style = ttk.Style()
+def configure_ttk_styles(master: tk.Misc | None = None) -> None:
+    """配置全局 ttk 样式，使按钮、输入框、标签框架风格一致。
+
+    务必在已有 Tk/Toplevel 之后调用（或传入 master）。
+    若在没有任何根窗口时调用 ttk.Style()，会偷偷创建一个空白幽灵窗口。
+    """
+    style = ttk.Style(master) if master is not None else ttk.Style()
 
     # 通用 TFrame 背景
     style.configure("TFrame", background=Colors.BG_WINDOW)
