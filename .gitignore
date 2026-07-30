@@ -31,6 +31,8 @@ assets/characters/
 build/
 dist/
 *.egg-info/
+app.ico
+DesktopPetSetup.spec
 
 # 维护者本地脚本（含 API 推送、一次性修复等，可能含账号/环境假设）
 scripts/

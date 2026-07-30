@@ -9,15 +9,30 @@ Windows 桌面互动宠物：无边框透明置顶、番茄钟、时光机历史
 
 ---
 
-## 快速开始
+## 给朋友：最快安装（推荐）
+
+朋友**不需要**装 Python，也**不用**打开仓库里那些 `.py` 源码。
+
+1. 打开 [Releases 发布页](https://github.com/witguang/desktop-pet/releases)
+2. 下载 **`DesktopPet-v*-windows.zip`**
+3. 解压后双击 **`DesktopPetSetup.exe`**（选安装目录 + 备忘录目录）  
+   或直接双击 **`DesktopPet.exe`** 便携运行
+
+更短的一页说明见：**[给朋友看.md](./给朋友看.md)**
+
+> Windows 若提示「未知发布者」：点「更多信息」→「仍要运行」。
+
+---
+
+## 开发者：从源码运行
 
 ```bash
-cd doraemon_pet
+# 或双击 启动桌宠.bat
 pip install -r requirements.txt
 python main.py
 ```
 
-默认角色为 **琪琪（kiki）**。指定角色启动 / 列出角色：
+指定角色 / 列出角色：
 
 ```bash
 python main.py --character kiki
@@ -25,30 +40,45 @@ python main.py --character doraemon
 python main.py --list-characters
 ```
 
-重新生成内置角色占位图（开发用）：
+### 打包成 exe 发给朋友
 
 ```bash
-python -m utils.pack_generator
+# 或双击 打包给朋友.bat
+python build_app.py
+```
+
+输出：
+
+| 路径 | 用途 |
+|------|------|
+| `dist/DesktopPet/` | 整文件夹拷给别人也能用 |
+| `dist/DesktopPet-v*-windows.zip` | **推荐发给朋友 / 上传 Release** |
+
+发布示例：
+
+```bash
+gh release create v1.1.6 dist/DesktopPet-v1.1.6-windows.zip --title "v1.1.6" --notes "Windows 安装包：解压后运行 DesktopPetSetup.exe"
 ```
 
 ---
 
-## 架构
+## 目录怎么读（看起来乱？）
+
+源码树是给**改程序的人**看的，日常使用只关心 Releases 里的 zip。根目录文件大致分工：
 
 ```
 doraemon_pet/
-├── main.py / app.py          # 入口与编排（角色无关）
-├── config.py                 # 引擎级配置（番茄钟、饥饿、热键…）
-├── characters/               # ★ 角色包目录（热插拔）
-│   ├── kiki/                 # 内置：琪琪（默认）
-│   ├── doraemon/             # 内置：哆啦A梦
-│   └── _template/            # 自定义模板（复制即用）
-├── core/
-│   ├── character_pack.py     # 角色包加载 / 发现 / 台词
-│   ├── pomodoro.py / hunger.py / mood.py / water_reminder.py / pet_state.py
-├── data/                     # JSON 任务日志 + 用户设置（当前角色）
-├── ui/                       # 宠物窗、面板、食物、角色切换器
-└── utils/asset_loader.py     # 按当前角色包加载 PNG/GIF
+├── 给朋友看.md / 启动桌宠.bat / 打包给朋友.bat   ← 实用入口
+├── main.py / app.py / config.py                  ← 程序入口与配置
+├── characters/          ★ 角色包（换皮只改这里）
+│   ├── kiki/  doraemon/  _template/
+├── core/                引擎逻辑（番茄钟、状态机…）
+├── data/                设置 / 任务日志读写代码
+├── ui/                  窗口与面板
+├── utils/               更新、安装、素材加载
+├── data_store/          运行时用户数据（不进 Git）
+├── build_app.py/.bat    打包成 exe
+└── DesktopPet.spec      PyInstaller 配置
 ```
 
 | 层 | 职责 |
@@ -59,6 +89,8 @@ doraemon_pet/
 | **UI** `ui/` | 渲染与交互，文案全部问角色包要 |
 
 状态优先级：`时光机 > 吃东西 > 喝水 > 专注 > 饥饿 > 待机`
+
+开发用：重新生成内置角色占位图 → `python -m utils.pack_generator`
 
 ---
 

@@ -99,13 +99,22 @@ def main() -> int:
     if icon_path is not None and icon_path.is_file():
         shutil.copy2(icon_path, main_dir / "app.ico")
 
+    # 给朋友一键分发的 zip（整包，解压即用）
+    zip_path = _make_friend_zip(main_dir)
+
     print("OK:", exe)
     setup = main_dir / "DesktopPetSetup.exe"
     if setup.exists():
         print("OK:", setup)
-    print("Share the whole folder: dist/DesktopPet/")
-    print("Friends can run DesktopPetSetup.exe to pick install + memo folders.")
-    print("Daily launch: DesktopPet.exe (Kiki desktop pet).")
+    if zip_path is not None:
+        print("OK:", zip_path)
+    print()
+    print("=== 给朋友 ===")
+    print("1) 把 zip 发过去，或上传到 GitHub Releases")
+    print("2) 朋友解压后双击 DesktopPetSetup.exe（推荐）或 DesktopPet.exe")
+    print("3) 无需安装 Python")
+    print()
+    print("Share folder:", main_dir)
     return 0
 
 
@@ -153,6 +162,7 @@ def _copy_sources_beside_exe(main_dir: Path) -> None:
         "VERSION",
         "requirements.txt",
         "README.md",
+        "给朋友看.md",
         ".gitignore",
         "DesktopPet.spec",
         "build_app.py",
@@ -179,7 +189,60 @@ def _copy_sources_beside_exe(main_dir: Path) -> None:
             dst,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".memo_history"),
         )
+    # 分发包内放一份极简说明，避免朋友打开一堆源码发懵
+    readme_friend = main_dir / "【先读我】安装说明.txt"
+    readme_friend.write_text(
+        "\n".join(
+            [
+                "Desktop Pet 桌面宠物 — 安装说明",
+                "================================",
+                "",
+                "【推荐】双击 DesktopPetSetup.exe",
+                "  → 选择安装位置、备忘录目录",
+                "  → 可选创建桌面快捷方式",
+                "",
+                "【也可以】直接双击 DesktopPet.exe 运行（便携模式）",
+                "",
+                "不需要安装 Python。",
+                "Windows 若提示「未知发布者」，点「更多信息」→「仍要运行」。",
+                "",
+                "日常使用：右键桌宠打开控制面板；Ctrl+Shift+P 也可。",
+                "退出：控制面板 / 主设置 → 退出桌宠。",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
     print("Copied source tree beside exe for hot update.")
+
+
+def _read_version() -> str:
+    path = ROOT / "VERSION"
+    try:
+        return path.read_text(encoding="utf-8").strip() or "0.0.0"
+    except OSError:
+        return "0.0.0"
+
+
+def _make_friend_zip(main_dir: Path) -> Path | None:
+    """打包 dist/DesktopPet 为可直接发给朋友的 zip。"""
+    if not main_dir.is_dir():
+        return None
+    version = _read_version()
+    out = ROOT / "dist" / f"DesktopPet-v{version}-windows.zip"
+    if out.exists():
+        out.unlink()
+    # zip 内顶层目录名固定，方便解压后找到
+    base_name = str(ROOT / "dist" / f"DesktopPet-v{version}")
+    archive = shutil.make_archive(base_name, "zip", root_dir=main_dir.parent, base_dir=main_dir.name)
+    # make_archive 生成 DesktopPet-vX.zip，与目标名对齐
+    generated = Path(archive)
+    if generated.resolve() != out.resolve():
+        if out.exists():
+            out.unlink()
+        generated.replace(out)
+    print(f"Friend zip: {out} ({out.stat().st_size // (1024 * 1024)} MB)")
+    return out
 
 
 if __name__ == "__main__":
