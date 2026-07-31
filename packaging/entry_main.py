@@ -1,6 +1,6 @@
 """桌宠入口（开发 / PyInstaller）。
 
-路径约定：本文件在 packaging/，项目根 = 上一级（含 characters/、src/、VERSION）。
+路径约定：本文件在 packaging/，项目根 = 上一级（含 characters/、src/）。
 开发：
   python packaging/entry_main.py
   或 scripts/启动桌宠.bat

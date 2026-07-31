@@ -67,9 +67,10 @@ def read_local_version(base: Path | None = None) -> str:
         if key in seen:
             continue
         seen.add(key)
-        path = root / "VERSION"
-        if path.exists():
-            return path.read_text(encoding="utf-8").strip() or "0.0.0"
+        for rel in ("VERSION", "packaging/VERSION"):
+            path = root / rel
+            if path.is_file():
+                return path.read_text(encoding="utf-8").strip() or "0.0.0"
     return "0.0.0"
 
 
@@ -155,17 +156,26 @@ def fetch_remote_version(
     branch: str = DEFAULT_GITHUB_BRANCH,
     proxies: list[str] | None = None,
 ) -> tuple[str, str]:
-    """返回 (version, used_url)。"""
+    """返回 (version, used_url)。优先 packaging/VERSION，兼容旧根目录 VERSION。"""
     owner, name = parse_repo(repo)
-    raw = f"https://raw.githubusercontent.com/{owner}/{name}/{branch}/VERSION"
     proxy_list = proxies if proxies is not None else [""] + BUILTIN_GH_PROXIES
-    data, used = _try_get(candidate_urls(raw, proxy_list))
-    text = data.decode("utf-8", errors="replace").strip()
-    # 去掉可能的 HTML 噪声
-    first_line = text.splitlines()[0].strip() if text else "0.0.0"
-    if first_line.startswith("<"):
-        raise RuntimeError("获取 VERSION 失败：返回了网页而非版本文件")
-    return first_line, used
+    paths = (
+        f"https://raw.githubusercontent.com/{owner}/{name}/{branch}/packaging/VERSION",
+        f"https://raw.githubusercontent.com/{owner}/{name}/{branch}/VERSION",
+    )
+    last_err: Exception | None = None
+    for raw in paths:
+        try:
+            data, used = _try_get(candidate_urls(raw, proxy_list))
+            text = data.decode("utf-8", errors="replace").strip()
+            first_line = text.splitlines()[0].strip() if text else "0.0.0"
+            if first_line.startswith("<"):
+                raise RuntimeError("获取 VERSION 失败：返回了网页而非版本文件")
+            return first_line, used
+        except Exception as exc:  # noqa: BLE001
+            last_err = exc
+            continue
+    raise RuntimeError(f"无法获取远程版本: {last_err}")
 
 
 def check_update(

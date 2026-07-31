@@ -140,7 +140,10 @@ def _ensure_app_icon() -> Path | None:
 
 def _read_version() -> str:
     try:
-        return (ROOT / "VERSION").read_text(encoding="utf-8").strip() or "0.0.0"
+        for path in (PKG_DIR / "VERSION", ROOT / "VERSION"):
+            if path.is_file():
+                return path.read_text(encoding="utf-8").strip() or "0.0.0"
+        return "0.0.0"
     except OSError:
         return "0.0.0"
 

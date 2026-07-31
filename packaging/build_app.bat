@@ -16,7 +16,7 @@ if errorlevel 1 (
 
 echo [1/4] Install deps ...
 python -m pip install -U pip
-python -m pip install -r requirements.txt
+python -m pip install -r packaging\requirements.txt
 python -m pip install -U pyinstaller
 if errorlevel 1 (
   echo [ERROR] pip install failed

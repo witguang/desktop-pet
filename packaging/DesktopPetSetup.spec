@@ -11,9 +11,12 @@ root = pkg.parent
 src = root / "src"
 icon = pkg / "app.ico"
 
-datas = [
-    (str(root / "VERSION"), "."),
-]
+_version = pkg / "VERSION"
+if not _version.is_file():
+    _version = root / "VERSION"
+datas = []
+if _version.is_file():
+    datas.append((str(_version), "."))
 if icon.is_file():
     datas.append((str(icon), "."))
 

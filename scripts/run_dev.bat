@@ -14,7 +14,7 @@ if errorlevel 1 (
 python -c "import PIL" 2>nul
 if errorlevel 1 (
   echo [1/2] Install deps ...
-  python -m pip install -r requirements.txt
+  python -m pip install -r packaging\requirements.txt
   if errorlevel 1 (
     echo [ERROR] pip failed
     pause

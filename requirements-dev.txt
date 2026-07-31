@@ -1,4 +1,0 @@
-# 开发 / 打包 / 测试（运行时只需 requirements.txt）
--r requirements.txt
-pyinstaller>=6.0
-pytest>=7.0
