@@ -31,7 +31,7 @@ hiddenimports = [
 ]
 
 a = Analysis(
-    [str(root / "main.py")],
+    [str(pkg / "entry_main.py")],
     pathex=[str(src), str(root)],
     binaries=binaries,
     datas=datas,

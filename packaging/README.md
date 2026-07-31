@@ -1,27 +1,22 @@
-# 打包说明
+# 打包
 
-## 一键打包
+入口与 PyInstaller 配置均在本目录。
+
+## 开发启动
 
 ```bash
-python packaging/build_app.py
-# 或双击 打包给朋友.bat
+# 在项目根
+python packaging/entry_main.py
 ```
 
-## 产物（只有一个 exe）
+## 打包
 
-| 路径 | 说明 |
-|------|------|
-| `../dist/DesktopPet.exe` | **唯一**发给朋友的程序 |
-| `../dist/DesktopPet-v*-windows.zip` | zip 里也只有 `DesktopPet.exe` |
+```bash
+# 在项目根
+python packaging/build_app.py
+# 或 scripts/build_release.bat
+```
 
-不再生成 `DesktopPetSetup.exe`。首次运行 `DesktopPet.exe` 会弹出设置向导（位置 / 备忘录 / 快捷方式 / 打开桌宠）。
+产出：`../dist/DesktopPet.exe` 与 zip（内仅一个 exe）。
 
-安装目录默认 **只有** `DesktopPet.exe`；运行后才会出现 `data_store/`（用户数据）。
-
-## 窗口图标
-
-`app.ico` 打进 exe，并在运行时用 `iconbitmap` / `iconphoto` 设置，替换标题栏左上角的 Python 羽毛。
-
-## Spec
-
-`DesktopPet.spec`：onefile，路径相对 `SPECPATH`，无绝对路径。
+`DesktopPet.spec` 路径相对 `SPECPATH`，无绝对路径。

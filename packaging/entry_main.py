@@ -1,4 +1,10 @@
-"""桌宠入口。开发时从 src/ 加载；打包版优先加载 exe 旁已更新的源码。"""
+"""桌宠入口（开发 / PyInstaller）。
+
+路径约定：本文件在 packaging/，项目根 = 上一级（含 characters/、src/、VERSION）。
+开发：
+  python packaging/entry_main.py
+  或 scripts/启动桌宠.bat
+"""
 from __future__ import annotations
 
 import sys
@@ -6,11 +12,10 @@ from pathlib import Path
 
 
 def _project_root() -> Path:
-    return Path(__file__).resolve().parent
+    return Path(__file__).resolve().parent.parent
 
 
 def _ensure_src_on_path() -> None:
-    """开发布局：业务代码在 src/，把其加入 import 路径。"""
     if getattr(sys, "frozen", False):
         return
     src = _project_root() / "src"
@@ -23,14 +28,12 @@ def _ensure_src_on_path() -> None:
 
 
 def _bootstrap_external_sources() -> None:
-    """打包 exe 若旁边有更新后的 app.py，则优先从磁盘加载，而不是 PYZ 旧代码。"""
     if not getattr(sys, "frozen", False):
         return
     root = Path(sys.executable).resolve().parent
     if not (root / "app.py").is_file():
         return
 
-    # 直接从磁盘加载加载器，避免先 import 到 PYZ 里的旧 utils
     loader_py = root / "utils" / "external_source.py"
     if loader_py.is_file():
         import importlib.util
@@ -45,7 +48,6 @@ def _bootstrap_external_sources() -> None:
             mod.enable_external_sources()
             return
 
-    # 无独立文件时：最小内联逻辑
     root_s = str(root)
     if root_s in sys.path:
         sys.path.remove(root_s)

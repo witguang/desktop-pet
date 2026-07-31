@@ -3,7 +3,7 @@
 
 Run from project root:
   python packaging/build_app.py
-  or: 打包给朋友.bat
+  or: scripts/build_release.bat  /  scripts/打包给朋友.bat
 
 朋友拿到的就是这一个 exe：
   - 首次运行会弹出设置向导（安装位置 / 备忘录 / 快捷方式 / 打开桌宠）

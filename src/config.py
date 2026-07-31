@@ -12,7 +12,7 @@ from pathlib import Path
 # 路径（支持 PyInstaller 打包；开发时源码在 src/，资源与数据在项目根）
 # ---------------------------------------------------------------------------
 def project_root() -> Path:
-    """项目根目录：含 main.py / characters / data_store。"""
+    """项目根目录：含 characters / data_store / packaging。"""
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     here = Path(__file__).resolve().parent

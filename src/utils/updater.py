@@ -265,7 +265,7 @@ def apply_zip_update(
 def resolve_relaunch_command() -> tuple[list[str], Path]:
     """
     返回 (命令行, 工作目录)，用于重新启动当前桌宠。
-    打包 exe：直接启动自身；开发模式：python main.py。
+    打包 exe：直接启动自身；开发模式：python packaging/entry_main.py。
     """
     if getattr(sys, "frozen", False):
         exe = Path(sys.executable).resolve()
@@ -276,11 +276,14 @@ def resolve_relaunch_command() -> tuple[list[str], Path]:
         root = here.parent.parent.parent
     else:
         root = here.parent.parent
-    main_py = root / "main.py"
-    if not main_py.is_file():
-        main_py = BASE_DIR / "main.py"
+    entry = root / "packaging" / "entry_main.py"
+    if not entry.is_file():
+        # 兼容旧布局
+        entry = root / "main.py"
+    if not entry.is_file():
+        entry = BASE_DIR / "packaging" / "entry_main.py"
     python = Path(sys.executable).resolve()
-    return [str(python), str(main_py)], main_py.parent
+    return [str(python), str(entry)], root if entry.name == "entry_main.py" else entry.parent
 
 
 def read_auto_restart_preference() -> bool:

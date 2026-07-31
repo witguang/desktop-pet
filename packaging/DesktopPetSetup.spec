@@ -25,7 +25,7 @@ binaries += tmp_ret[1]
 hiddenimports += tmp_ret[2]
 
 a = Analysis(
-    [str(root / "install_app.py")],
+    [str(pkg / "entry_install.py")],
     pathex=[str(src), str(root)],
     binaries=binaries,
     datas=datas,

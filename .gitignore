@@ -34,8 +34,9 @@ dist/
 app.ico
 packaging/app.ico
 
-# 维护者本地脚本（含 API 推送、一次性修复等，可能含账号/环境假设）
-scripts/
+# 维护者私密脚本（含 API 推送等，可能含密钥）— 勿忽略公开的 scripts/*.bat
+scripts/_private/
+scripts/local/
 
 # packaging/ 内 DesktopPet.spec / DesktopPetSetup.spec / build_app.spec 为可移植手写版，需进仓库
 # 勿提交 PyInstaller 自动生成、含本机盘符的 .spec

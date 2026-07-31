@@ -95,7 +95,7 @@ Get-CimInstance Win32_Process | Where-Object {{
   if (-not $cl) {{ return }}
   $low = $cl.ToLowerInvariant()
   $hit = $false
-  if ($low.Contains($base) -and ($low.Contains('main.py') -or $low.Contains('desktoppet') -or $low.Contains('doraemon_pet'))) {{
+  if ($low.Contains($base) -and ($low.Contains('entry_main.py') -or $low.Contains('main.py') -or $low.Contains('desktoppet') -or $low.Contains('doraemon_pet'))) {{
     $hit = $true
   }}
   if (-not $hit -and $low.Contains($base) -and $_.Name -like 'DesktopPet*') {{

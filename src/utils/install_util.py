@@ -310,7 +310,10 @@ def find_main_exe(install_dir: Path) -> Path | None:
         if c.exists():
             return c
     # python 开发模式
-    main_py = install_dir / "main.py"
-    if main_py.exists():
-        return main_py
+    for cand in (
+        install_dir / "packaging" / "entry_main.py",
+        install_dir / "main.py",
+    ):
+        if cand.is_file():
+            return cand
     return None

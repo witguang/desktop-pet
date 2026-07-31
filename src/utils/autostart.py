@@ -34,21 +34,23 @@ def is_enabled() -> bool:
 def resolve_launch_target() -> tuple[Path, Path, list[str]]:
     """
     返回 (target, workdir, extra_args)。
-    frozen: DesktopPet.exe；开发: python.exe + main.py
+    frozen: DesktopPet.exe；开发: python.exe + packaging/entry_main.py
     """
     if getattr(sys, "frozen", False):
         exe = Path(sys.executable).resolve()
         return exe, exe.parent, []
 
-    # 开发模式：用当前解释器启动项目根 main.py
+    # 开发模式：用当前解释器启动 packaging/entry_main.py
     here = Path(__file__).resolve()
     if here.parent.name == "utils" and here.parent.parent.name == "src":
         root = here.parent.parent.parent
     else:
         root = here.parent.parent
-    main_py = root / "main.py"
+    entry = root / "packaging" / "entry_main.py"
+    if not entry.is_file():
+        entry = root / "main.py"  # 旧布局兼容
     python = Path(sys.executable).resolve()
-    return python, main_py.parent, [str(main_py)]
+    return python, root, [str(entry)]
 
 
 def enable() -> tuple[bool, str]:

@@ -465,16 +465,19 @@ class SettingsPanel:
             )
             return
 
-        # 开发模式：快捷方式指向 python + main.py
+        # 开发模式：快捷方式指向 python + packaging/entry_main.py
         sc_path = desktop_dir() / "Desktop Pet.lnk"
         if target.suffix.lower() == ".exe":
             ok = create_windows_shortcut(target, sc_path, workdir=target.parent)
         else:
-            # main.py → 用当前解释器
+            # entry_main.py → 工作目录用项目根（entry 的上两级或 install 根）
+            work = target.parent
+            if target.name == "entry_main.py" and work.name == "packaging":
+                work = work.parent
             ok = autostart._create_shortcut_with_args(  # noqa: SLF001
                 sc_path,
                 Path(sys.executable).resolve(),
-                target.parent,
+                work,
                 [str(target.resolve())],
             )
 

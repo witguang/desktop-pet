@@ -1,194 +1,112 @@
-# 可换角色桌面宠物（Desktop Pet）
+# Desktop Pet（可换角色桌面宠物）
 
-Windows 桌面互动宠物：无边框透明置顶、番茄钟、时光机历史、喂食/快递投递、喝水与用餐提醒、备忘录等。
+Windows 桌面互动宠物：透明置顶、番茄钟、时光机、喂食/快递、喝水用餐提醒、备忘录。
 
-**核心设计：引擎与角色完全分离。** 内置 **琪琪（Kiki）** 与 **哆啦A梦** 两套角色包；换成猫、机器人、自绘 OC 只需丢一个文件夹，**不用改 Python 代码**。
+**引擎与角色分离** — 内置 **琪琪（Kiki）** / **哆啦A梦**；换皮只需 `characters/<id>/`，不必改 Python。
 
-技术栈：Python 3.10+ / Tkinter / Pillow（可选 `keyboard` 全局热键）
+技术栈：Python 3.10+ · Tkinter · Pillow（可选 `keyboard`）
 
-当前版本见根目录 [`VERSION`](./VERSION)（开发可用 `python main.py --version`）。
-
-后续优化路线（建议 + 已落地项）见仓库外文档：`../.grok/optimization-roadmap-2026-07-31.md`（若从 monorepo 布局打开）。
+版本：根目录 [`VERSION`](./VERSION) · `python packaging/entry_main.py --version`
 
 ---
 
-## 给朋友：最快安装（推荐）
+## 给朋友（推荐）
 
-朋友**不需要**装 Python，也**不用**打开仓库里那些 `.py` 源码。
+1. [Releases](https://github.com/witguang/desktop-pet/releases) 下载 **`DesktopPet-v*-windows.zip`**（请勿直接下裸 `.exe`）
+2. 解压后双击 **`DesktopPet.exe`**
+3. 首次设置：安装位置 / 备忘录（**建议 D 盘，仅提示**）· 快捷方式 · 是否打开桌宠
 
-1. 打开 [Releases 发布页](https://github.com/witguang/desktop-pet/releases)
-2. **只下载 `DesktopPet-v*-windows.zip`**（请勿直接下裸 `.exe`，浏览器会提示「通常不会下载」）
-3. 解压后双击里面的 **`DesktopPet.exe`**
-4. 首次弹出设置向导：
-   - **建议安装在 D 盘**（仅提示；路径需自己选，不会自动填 `D:\某文件夹`）
-   - 软件安装位置、备忘录目录均可浏览
-   - 默认勾选：桌面快捷方式、完成后打开桌宠（可取消）
-
-安装完成后，安装目录里正常 **只有一个 `DesktopPet.exe`**（用一段时间后会出现 `data_store/` 存设置，可忽略）。
-
-更短的一页说明见：**[给朋友看.md](./给朋友看.md)**（含浏览器拦截 / SmartScreen 图文步骤）。
-
-### 分发与 SmartScreen（为什么会拦）
-
-| 现象 | 原因 | 用户侧处理 | 开发者侧根治 |
-|------|------|------------|--------------|
-| Edge/Chrome「通常不会下载 xxx.exe」 | 浏览器对**不常见、未签名 exe**的下载保护 | **改下 zip**；或下载栏 → 保留 → 仍要保留 | Release **只挂 zip**；有条件再做代码签名 |
-| 「Windows 已保护你的电脑」 | SmartScreen + **无 Authenticode 签名** | 「更多信息」→「仍要运行」；属性里「解除锁定」 | 购买 OV/EV **代码签名证书** 并 `signtool` 签名 exe |
-| 杀软误报 | 自打包 PyInstaller 常见 | 添加信任 / 允许 | 签名 + 提高下载量建立信誉 |
-
-开源小工具未签名时，上述提示**不等于病毒**；朋友按 [给朋友看.md](./给朋友看.md) 操作即可。
+说明与 SmartScreen 处理：**[docs/给朋友看.md](./docs/给朋友看.md)**
 
 ---
 
-## 开发者：从源码运行
+## 开发
 
 ```bash
-# 或双击 启动桌宠.bat
 pip install -r requirements.txt
-python main.py
+python packaging/entry_main.py
+# 或 scripts/run_dev.bat  /  scripts/启动桌宠.bat
 ```
 
-指定角色 / 列出角色：
-
 ```bash
-python main.py --character kiki
-python main.py --character doraemon
-python main.py --list-characters
+python packaging/entry_main.py --character kiki
+python packaging/entry_main.py --list-characters
+python packaging/entry_main.py --version
 ```
 
-### 打包成 exe 发给朋友
+### 打包
 
 ```bash
-# 或双击 打包给朋友.bat
 python packaging/build_app.py
+# 或 scripts/build_release.bat  /  scripts/打包给朋友.bat
 ```
 
-产出（**只有一个 exe**）：
-
-| 路径 | 用途 |
+| 输出 | 说明 |
 |------|------|
-| `dist/DesktopPet.exe` | 单文件主程序（角色资源 + 图标已打进包内） |
-| `dist/DesktopPet-v*-windows.zip` | zip 内也只有上述 exe |
+| `dist/DesktopPet.exe` | 单文件主程序 |
+| `dist/DesktopPet-v*-windows.zip` | **发给朋友用这个** |
 
-说明：
-
-- **onefile**：不再生成 `DesktopPetSetup.exe`、不再把源码树铺在安装目录
-- 窗口左上角图标为 Kiki `app.ico`（不是 Python 羽毛）
-- 路径可移植：`.spec` 相对 `SPECPATH`，禁止硬编码绝对路径
-
-发布示例：
-
-```bash
-gh release create v1.1.9 dist/DesktopPet-v1.1.9-windows.zip dist/DesktopPet.exe \
-  --title "v1.1.9" \
-  --notes "单文件 DesktopPet.exe：双击安装向导；建议 D 盘（仅提示）；安装目录只有一个 exe"
-```
+开发依赖：`pip install -r requirements-dev.txt` · 测试：`pytest tests/`
 
 ---
 
 ## 目录结构
 
-朋友只下载 Releases；开发时根目录尽量只留入口与资源：
-
 ```
-doraemon_pet/
-├── 给朋友看.md / 启动桌宠.bat / 打包给朋友.bat   ← 实用入口
-├── main.py / install_app.py                      ← 启动入口（薄）
-├── VERSION / requirements.txt / README.md
+desktop-pet/                 # 仓库根目录尽量干净
+├── README.md
+├── VERSION
+├── requirements.txt
+├── requirements-dev.txt
+├── .gitignore
 │
-├── characters/          ★ 角色包（换皮只改这里）
-│   ├── kiki/  doraemon/  _template/
-│
-├── src/                 ★ 全部业务源码
-│   ├── app.py / config.py
-│   ├── core/            引擎（番茄钟、状态机…）
-│   ├── data/            设置 / 任务日志
-│   ├── ui/              窗口与面板 / 安装向导
-│   └── utils/           更新、安装、素材加载
-│
-├── packaging/           ★ 打包（PyInstaller onefile）
-│   ├── build_app.py / build_app.bat
+├── characters/              # 角色包
+├── src/                     # 业务源码
+├── packaging/               # 入口 + PyInstaller
+│   ├── entry_main.py
+│   ├── build_app.py
 │   └── DesktopPet.spec
-│
-└── data_store/          运行时用户数据（不进 Git）
+├── scripts/                 # 本机快捷脚本
+│   ├── run_dev.bat
+│   └── build_release.bat
+├── docs/                    # 文档
+│   └── 给朋友看.md
+└── tests/
 ```
 
 | 层 | 职责 |
 |----|------|
-| **角色包** `characters/*` | 外观、食物名、台词、UI 文案 |
-| **引擎** `src/core/` + `src/app.py` | 番茄钟、饥饿、喝水、状态机 |
-| **存储** `src/data/` | 任务日志、当前角色 id |
-| **UI** `src/ui/` | 渲染与交互，文案全部问角色包要 |
-
-状态优先级：`时光机 > 吃东西 > 喝水 > 专注 > 饥饿 > 待机`
-
-开发用占位图：`python -c "import sys; sys.path.insert(0,'src'); from utils.pack_generator import generate_all; generate_all()"`
+| `characters/*` | 外观、台词、UI 文案 |
+| `src/core` + `app.py` | 番茄钟、状态机、提醒 |
+| `src/ui` | 窗口与面板 |
+| `packaging` | 启动入口与打包 |
 
 ---
 
-## 替换 / 新增角色
+## 新增角色
 
-### 方式 A：一键切换（已安装的包）
-
-1. 右键桌宠 → 控制面板 → **切换角色**
-2. 或快捷键 `Ctrl+Shift+C`
-3. 点「使用」即可热切换，**无需重启**
-
-### 方式 B：新增自定义角色
-
-```text
-1. 复制  characters/_template
-2. 改名为  characters/my_cat
-3. 编辑   character.json
-4. 替换   assets/ 下的像素图
-5. 在「切换角色」面板点刷新 → 使用
-```
-
-**不需要改任何 `.py` 文件。** 完整字段见 `characters/_template/README.md`。
+复制 `characters/_template` → 改 `character.json` + `assets/` → 控制面板「切换角色」。详见模板 README。
 
 ---
 
-## 内置角色
-
-| id | 名称 | 互动道具 | 计量 | 风格 |
-|----|------|----------|------|------|
-| `kiki` | 琪琪 | 快递包裹 📦 | 愉悦值（mood） | 魔女宅急便风，**默认角色** |
-| `doraemon` | 哆啦A梦 | 铜锣烧 🍩 | 饥饿值（hunger） | 经典蓝胖子 |
-
----
-
-## 操作一览
+## 操作
 
 | 操作 | 方式 |
 |------|------|
-| 移动 | 左键拖动 |
+| 移动 | 左键拖 |
 | 控制面板 | 右键 / `Ctrl+Shift+P` |
-| 生成道具 | 双击 / 面板 / `Ctrl+Shift+D` |
-| 投递 / 喂食 | 把道具拖到角色身上 |
-| 切换角色 | 面板 / `Ctrl+Shift+C` |
-| 时光机 | 面板按钮 |
-| 退出 | 控制面板 / 主设置 →「退出桌宠」 |
+| 生成道具 | 双击 / `Ctrl+Shift+D` |
+| 切换角色 | `Ctrl+Shift+C` |
+| 退出 | 控制面板 / 主设置 |
 
 ---
 
-## 数据文件
+## 分发说明
 
-| 文件 | 内容 |
-|------|------|
-| `data_store/task_logs.json` | 任务与番茄钟会话 |
-| `data_store/settings.json` | 角色 id、备忘录路径、更新源等（不进 Git） |
-| 自定义备忘录目录 | 每日备忘录 `YYYY-MM-DD.md` |
-
----
-
-## 系统要求
-
-- Windows 10/11（色键透明效果最佳）
-- 朋友：无需 Python，下载 Releases 单文件 exe 即可
-- 开发：Python 3.10+、Tkinter、Pillow；可选 `keyboard`（全局热键）
+未做代码签名时，浏览器可能拦截裸 `.exe`、SmartScreen 可能提示「未知发布者」——**请分发 zip**，并让用户「更多信息 → 仍要运行」。详见 [docs/给朋友看.md](./docs/给朋友看.md)。
 
 ---
 
 ## 版权
 
-本项目为学习 / 演示用引擎框架。内置「琪琪」「哆啦A梦」等形象仅为示意/同人向占位；请使用**自绘或已授权**素材，勿将未授权官方美术用于商用。
+学习 / 演示框架。内置形象为示意占位；商用请使用自绘或已授权素材。
