@@ -101,10 +101,12 @@ def main() -> int:
     print("OK:", _rel_to_root(zip_path), f"({size_mb} MB)  ← 里面只有 DesktopPet.exe")
     print()
     print("=== 给朋友 ===")
-    print("只发这一个文件即可：", _rel_to_root(zip_path))
-    print("或直接发：", _rel_to_root(main_exe))
-    print("双击 DesktopPet.exe → 首次设置 → 完成")
+    print("请发 zip（浏览器不易拦截）：", _rel_to_root(zip_path))
+    print("勿让朋友从网页直接下裸 .exe（会提示「通常不会下载」）")
+    print("解压后双击 DesktopPet.exe → 首次设置 → 完成")
     print("安装目录只有 DesktopPet.exe（运行后才有 data_store）")
+    print("GitHub Release 建议只上传 zip：")
+    print(f"  gh release create v{version} dist/DesktopPet-v{version}-windows.zip")
     return 0
 
 
